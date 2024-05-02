@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "package"
+dependencies = [
+  "numpy",
+  "matplotlib",
+  "mp_api>=0.34.0",
+  "pandas>=2.0.3",
+  "scipy>=1.11.2",
+  "py4DSTEM @ git+https://github.com/py4dstem/py4DSTEM.git@dev"
+]
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = {attr = "package.__version__"}
+
+[tool.hatchling.requires]
+python = ">=3.10"
+
+[tool.hatchling.dependencies]
+numpy = "*"
+matplotlib = "*"
+mp_api = ">=0.34.0"
+pandas = ">=2.0.3"
+py4DSTEM = { git = "git@github.com:py4dstem/py4DSTEM.git", branch = "dev" }
+scipy = ">=1.11.2"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.version]
+path = "src/package/__init__.py"
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311"]
+exclude = "__init__.py"
+
+[tool.ruff]
+exclude = ["__init__.py"]

@@ -1,0 +1,36 @@
+name: Bump version
+on:
+  workflow_run:
+    workflows: ["install checker quick"]
+    types:
+      - completed
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: |
+          python -m pip install hatchling
+      - name: bump-version
+        run: |
+          hatchling version patch
+      - name: Add file
+        run: |
+          git add .
+      - name: Commit and push
+        run: |
+          new_version=$(hatchling version)
+          git config --global user.email "alexrakowski90@gmail.com"
+          git config --global user.name "alex-rakowski"
+          git commit -m "Bump version to $new_version"
+          git push
+
+      - name: Tag Release
+        run: |
+          new_version=$(hatchling version)
+          git tag "$new_version"
+          git push origin "$new_version"
