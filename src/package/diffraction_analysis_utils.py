@@ -402,6 +402,7 @@ def build_input_vector(patterns_vec):
 def predict_exp_patterns(cry_sys_model, vectorized_array_of_patterns, list_of_labels_for_patterns,
                          pl_indicies_reference, lattice_model_dict,
                          cry_sys_lattice):
+    print('starting')
     if type(list_of_labels_for_patterns) == type(None):
         list_of_labels_for_patterns = []
         for i in range(0, len(vectorized_array_of_patterns)):
@@ -449,10 +450,11 @@ def predict_exp_patterns(cry_sys_model, vectorized_array_of_patterns, list_of_la
         count = 0
         lattice_predictions_full = []
         lattice_trees = lattice_model.estimators_
-        for lattice_tree in lattice_trees:
+        for lattice_tree_ind in tqdm(range(len(lattice_trees))):
+            lattice_tree = lattice_trees[lattice_tree_ind]
             # print(count)
             lattice_predictions_full.append(lattice_tree.predict(np.asarray(vectorized_array_of_patterns)))
-            count += 1
+            # count += 1
             # print(tree.predict(np.asarray(updated_spectra_test)))
         lattice_predictions_ordered = np.asarray(lattice_predictions_full).T
 
