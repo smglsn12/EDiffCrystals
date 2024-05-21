@@ -174,8 +174,13 @@ class Diffraction_Analysis():
                     subdf[param_label],
                     edgecolor='k', linewidth=1,
                     bins=bins, stacked=True, density=True)
-                print('median ' + str(np.median(subdf[param_label])))
-                print('mean ' + str(round(np.mean(subdf[param_label]), 2)))
+                median = np.median(subdf[param_label])
+                mean = round(np.mean(subdf[param_label]), 2)
+
+
+                print('median ' + str(median))
+                print('mean ' + str(mean))
+                plt.vlines(median, min(hist[0]), max(hist[0]))
                 plt.title(param + ' Axis', fontsize=14)
                 plt.show()
 
