@@ -12,7 +12,10 @@ dependencies:
   - attrs=23.2.0=pyh71513ae_0
   - babel=2.14.0=pyhd8ed1ab_0
   - beautifulsoup4=4.12.3=pyha770c72_0
+  - blas=1.0=mkl
   - bleach=6.1.0=pyhd8ed1ab_0
+  - bottleneck=1.3.7=py310h9128911_0
+  - brotli=1.0.9=ha925a31_2
   - brotli-python=1.1.0=py310h00ffb61_1
   - bzip2=1.0.8=h2bbff1b_6
   - ca-certificates=2024.3.11=haa95532_0
@@ -29,7 +32,9 @@ dependencies:
   - entrypoints=0.4=pyhd8ed1ab_0
   - exceptiongroup=1.2.0=pyhd8ed1ab_2
   - executing=2.0.1=pyhd8ed1ab_0
+  - fonttools=4.51.0=py310h2bbff1b_0
   - fqdn=1.5.1=pyhd8ed1ab_0
+  - freetype=2.12.1=ha860e81_0
   - h11=0.14.0=pyhd8ed1ab_0
   - h2=4.1.0=pyhd8ed1ab_0
   - hpack=4.0.0=pyh9f0ad1d_0
@@ -40,11 +45,13 @@ dependencies:
   - importlib-metadata=7.1.0=pyha770c72_0
   - importlib_metadata=7.1.0=hd8ed1ab_0
   - importlib_resources=6.4.0=pyhd8ed1ab_0
+  - intel-openmp=2023.1.0=h59b6b97_46320
   - ipykernel=6.29.3=pyha63f2e9_0
   - ipython=8.24.0=pyh7428d3b_0
   - isoduration=20.11.0=pyhd8ed1ab_0
   - jedi=0.19.1=pyhd8ed1ab_0
   - jinja2=3.1.4=pyhd8ed1ab_0
+  - jpeg=9e=h2bbff1b_1
   - json5=0.9.25=pyhd8ed1ab_0
   - jsonpointer=2.4=py310h5588dad_3
   - jsonschema=4.22.0=pyhd8ed1ab_0
@@ -59,22 +66,39 @@ dependencies:
   - jupyterlab=4.2.0=pyhd8ed1ab_1
   - jupyterlab_pygments=0.3.0=pyhd8ed1ab_1
   - jupyterlab_server=2.27.1=pyhd8ed1ab_0
+  - lcms2=2.12=h83e58a3_0
+  - lerc=3.0=hd77b12b_0
+  - libdeflate=1.17=h2bbff1b_1
   - libffi=3.4.4=hd77b12b_1
+  - libpng=1.6.39=h8cc25b3_0
   - libsodium=1.0.18=h8d14728_1
+  - libtiff=4.5.1=hd77b12b_0
+  - libwebp-base=1.3.2=h2bbff1b_0
+  - lz4-c=1.9.4=h2bbff1b_1
   - markupsafe=2.1.5=py310h8d17308_0
+  - matplotlib-base=3.8.4=py310h4ed8f06_0
   - matplotlib-inline=0.1.7=pyhd8ed1ab_0
   - mistune=3.0.2=pyhd8ed1ab_0
+  - mkl=2023.1.0=h6b88ed4_46358
+  - mkl-service=2.4.0=py310h2bbff1b_1
+  - mkl_fft=1.3.8=py310h2bbff1b_0
+  - mkl_random=1.2.4=py310h59b6b97_0
   - nbclient=0.10.0=pyhd8ed1ab_0
   - nbconvert-core=7.16.4=pyhd8ed1ab_0
   - nbformat=5.10.4=pyhd8ed1ab_0
   - nest-asyncio=1.6.0=pyhd8ed1ab_0
   - notebook-shim=0.2.4=pyhd8ed1ab_0
+  - numexpr=2.8.7=py310h2cd9be0_0
+  - numpy=1.26.4=py310h055cbcc_0
+  - numpy-base=1.26.4=py310h65a83cf_0
+  - openjpeg=2.4.0=h4fc8c34_0
   - openssl=3.3.0=hcfcfb64_0
   - overrides=7.7.0=pyhd8ed1ab_0
   - packaging=24.0=pyhd8ed1ab_0
   - pandocfilters=1.5.0=pyhd8ed1ab_0
   - parso=0.8.4=pyhd8ed1ab_0
   - pickleshare=0.7.5=py_1003
+  - pillow=10.3.0=py310h2bbff1b_0
   - pip=24.0=py310haa95532_0
   - pkgutil-resolve-name=1.3.10=pyhd8ed1ab_1
   - platformdirs=4.2.1=pyhd8ed1ab_0
@@ -88,6 +112,7 @@ dependencies:
   - python=3.10.13=he1021f5_0
   - python-fastjsonschema=2.19.1=pyhd8ed1ab_0
   - python-json-logger=2.0.7=pyhd8ed1ab_0
+  - python-tzdata=2023.3=pyhd3eb1b0_0
   - python_abi=3.10=2_cp310
   - pytz=2024.1=pyhd8ed1ab_0
   - pywinpty=2.0.13=py310h00ffb61_0
@@ -98,6 +123,7 @@ dependencies:
   - rfc3339-validator=0.1.4=pyhd8ed1ab_0
   - rfc3986-validator=0.1.1=pyh9f0ad1d_0
   - rpds-py=0.18.1=py310hc226416_0
+  - seaborn=0.12.2=py310haa95532_0
   - send2trash=1.8.3=pyh5737063_0
   - setuptools=69.5.1=py310haa95532_0
   - six=1.16.0=pyh6c4a22f_0
@@ -105,6 +131,7 @@ dependencies:
   - soupsieve=2.5=pyhd8ed1ab_1
   - sqlite=3.45.3=h2bbff1b_0
   - stack_data=0.6.2=pyhd8ed1ab_0
+  - tbb=2021.8.0=h59b6b97_0
   - terminado=0.18.1=pyh5737063_0
   - tinycss2=1.3.0=pyhd8ed1ab_0
   - tk=8.6.14=h0416ee5_0
@@ -117,6 +144,7 @@ dependencies:
   - typing_utils=0.1.0=pyhd8ed1ab_0
   - tzdata=2024a=h04d1e81_0
   - ucrt=10.0.22621.0=h57928b3_0
+  - unicodedata2=15.1.0=py310h2bbff1b_0
   - uri-template=1.3.0=pyhd8ed1ab_0
   - urllib3=2.2.1=pyhd8ed1ab_0
   - vc=14.2=h21ff451_1
@@ -133,6 +161,7 @@ dependencies:
   - yaml=0.2.5=h8ffe710_2
   - zeromq=4.3.5=he0c23c2_3
   - zlib=1.2.13=h8cc25b3_1
+  - zstd=1.5.5=hd43e919_2
   - pip:
       - click==8.1.7
       - cloudpickle==3.0.0
@@ -144,7 +173,6 @@ dependencies:
       - distributed==2024.5.0
       - emdfile==0.0.14
       - filelock==3.14.0
-      - fonttools==4.51.0
       - fsspec==2024.3.1
       - gdown==5.1.0
       - h5py==3.11.0
@@ -154,15 +182,12 @@ dependencies:
       - kiwisolver==1.4.5
       - lazy-loader==0.4
       - locket==1.0.0
-      - matplotlib==3.8.4
       - mpire==2.10.2
       - msgpack==1.0.8
       - ncempy==1.11.1
       - networkx==3.3
-      - numpy==1.26.4
       - pandas==1.5.3
       - partd==1.4.2
-      - pillow==10.3.0
       - py4dstem==0.14.8
       - pyaml==24.4.0
       - pylops==2.2.0
