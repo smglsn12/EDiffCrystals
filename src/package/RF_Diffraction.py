@@ -28,7 +28,7 @@ from sklearn.metrics import log_loss
 # from cuml.dask.common import utils as dask_utils
 # from dask_cuda import LocalCUDACluster, initialize
 # from pymatgen.ext.matproj import MPRester
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+# from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from sklearn.metrics import r2_score
 import matplotlib
 import math
@@ -37,9 +37,10 @@ from matplotlib.colors import hsv_to_rgb
 import warnings
 import os
 warnings.filterwarnings('ignore')
+from tqdm import tqdm
 
+def generate_diff_aggregate_space_group(cry_sys, subdf, show_plots = True, include_legend = [False], include_difference_aggregation = True, num = 10):
 
-def generate_diff_aggregate_space_group(cry_sys, subdf, show_plots = True, include_legend = [False], include_difference_aggregation = True):
     # print(test_indicies)
     material_id = subdf.iloc[0].mat_id
     sg_true = subdf.iloc[0]['True Value Space Group']
@@ -60,7 +61,6 @@ def generate_diff_aggregate_space_group(cry_sys, subdf, show_plots = True, inclu
     
     # print(len(all_predictions))
     all_pred_df = pd.DataFrame(all_predictions, columns = ['all_predictions'])
-
     
     weighted_ag = {}
     sgs = all_pred_df['all_predictions'].unique()
@@ -73,7 +73,7 @@ def generate_diff_aggregate_space_group(cry_sys, subdf, show_plots = True, inclu
         # print(x_predictions)
 
 
-        mode = scipy.stats.mode(x_predictions)[0][0]
+        mode = scipy.stats.mode(x_predictions)[0]
 
         sg_full_pred.append(x_predictions)
         sg_modes.append(mode)
@@ -168,9 +168,9 @@ class RF_Diffraction_model():
         
     def load_cry_sys_ouptut(self):
         print('loading crystal system output')
-        self.rf_output_radial = joblib.load('crystal_system_output.joblib')
-        self.radial_train_ids = joblib.load('radial_inputs_0_5.joblib')
-        self.radial_test_ids = joblib.load('radial_inputs_1_5.joblib')
+        self.rf_output_radial = joblib.load('data/crystal_system_inputs_and_outputs/crystal_system_output.joblib')
+        self.radial_train_ids = joblib.load('data/crystal_system_inputs_and_outputs/radial_inputs_0_5.joblib')
+        self.radial_test_ids = joblib.load('data/crystal_system_inputs_and_outputs/radial_inputs_1_5.joblib')
         print('crystal system output loaded')
         
         
@@ -225,16 +225,16 @@ class RF_Diffraction_model():
         # cmap=matplotlib.cm.get_cmap('plasma')
         # ax = sn.heatmap(df_cm, annot=True, vmin = 0, vmax = 0.22, cmap = sn.color_palette("rocket_r", as_cmap=True))
 
-
+        print(df_cm)
         ax = sn.heatmap(df_cm, annot=True, cmap = 'Blues', vmin = 0, vmax = 23, cbar_kws={"ticks":[0.0,5,10,15,20], "location":'bottom', 
                                                                                          "fraction":0.2, 'pad':0.1, 'label':'Percent Test Set'})
-        for tick in ax.xaxis.get_major_ticks():
-            tick.label.set_fontsize(42)
+        # for tick in ax.xaxis.get_major_ticks():
+        #     tick.label.set_fontsize(42)
             
         ax.tick_params(rotation=0)
 
-        for tick in ax.yaxis.get_major_ticks():
-            tick.label.set_fontsize(42)
+        # for tick in ax.yaxis.get_major_ticks():
+        #     tick.label.set_fontsize(42)
         # ax.set_title('Confusion Matrix with labels\n', fontsize = 36);
         ax.set_xlabel('Predicted Values', fontsize = 46)
         ax.set_ylabel('Actual Values ', fontsize = 46)
@@ -246,7 +246,7 @@ class RF_Diffraction_model():
         # crystal_sys_alph = ['cubic', 'hexagonal', 'monoclinic', 'orthorhombic', 'tetragonal', 'trigonal']
         crystal_sys_alph = ['cubic', 'hexagonal', 'trigonal', 'tetragonal', 'monoclinic', 'orthorhombic']           
         
-        if os.path.exists('prediction_matrix_confidence.npy') == False:
+        if os.path.exists('data/crystal_system_inputs_and_outputs/prediction_matrix_confidence.npy') == False:
             predictions_matrix = []
 
             for j in range(0, len(crystal_sys_alph)):
@@ -290,7 +290,7 @@ class RF_Diffraction_model():
             # np.save('Model_data/Crystal_sys_outputs/prediction_matrix_confidence.npy', predictions_matrix)  
         
         else:
-            predictions_matrix = np.load('prediction_matrix_confidence.npy')
+            predictions_matrix = np.load('data/crystal_system_inputs_and_outputs/prediction_matrix_confidence.npy')
         # crystal_sys_alph = ['C', 'H', 'M', 'O', 'Te', 'Tr']
         crystal_sys_alph = ['C', 'H', 'Tr', 'Te', 'M', 'O']
 
@@ -324,13 +324,13 @@ class RF_Diffraction_model():
         ax = sn.heatmap(df_cm, annot=True, vmin=0.0, vmax=100, cmap = newcmp, cbar_kws={"location":'bottom', 
                                                                                          "fraction":0.2, 'pad':0.1, 'label':"Percent Trees"})
 
-        for tick in ax.xaxis.get_major_ticks():
-            tick.label.set_fontsize(42)
+        # for tick in ax.xaxis.get_major_ticks():
+        #     tick.label.set_fontsize(42)
             
-        ax.tick_params(rotation=0)
+        # ax.tick_params(rotation=0)
 
-        for tick in ax.yaxis.get_major_ticks():
-            tick.label.set_fontsize(42)
+        # for tick in ax.yaxis.get_major_ticks():
+        #     tick.label.set_fontsize(42)
         # ax.set_title('Confusion Matrix with labels\n', fontsize = 36);
         ax.set_xlabel('Predicted Values', fontsize = 46)
         ax.set_ylabel('Actual Values ', fontsize = 46)
@@ -359,7 +359,7 @@ class RF_Diffraction_model():
                 patterns.append(self.full_df.iloc[i]['radial_200_ang_Colin_basis'])
             output_df['radial_200_ang_Colin_basis'] = patterns
 
-            self.output_df = output_df
+            self.output_df = output_dffull_predictions_a
         
     def add_lattice_data_to_condensed_df(self):
         new_rows = []
@@ -724,19 +724,19 @@ class RF_Diffraction_model():
     
     
     def visualize_space_group_results_aggregate(self, cry_sys):
+        if self.loaded_submodels_space_group[0] == False:
+            self.load_submodels_space_group(cry_sys, regen_inputs = False)
         
-        self.load_submodels_space_group(cry_sys)
+        # warnings.filterwarnings('ignore')
         
-        warnings.filterwarnings('ignore')
-        
-        true_cry_sys = self.condensed_output_df.loc[self.condensed_output_df['True Values Crystal System']== cry_sys]
-        true_cry_sys_ids = true_cry_sys.mat_id.to_numpy()
-        test_cry_sys_correct_predictions = self.condensed_output_df.loc[(self.condensed_output_df['Aggregate Predictions Crystal System'] == cry_sys) & 
-                                                                               (self.condensed_output_df['True Values Crystal System'] == cry_sys)]
-        correct_cry_sys_ids = test_cry_sys_correct_predictions.mat_id.to_numpy()
-        test_set_cry_sys_mispredictions = self.condensed_output_df.loc[(self.condensed_output_df['Aggregate Predictions Crystal System'] == cry_sys) & 
-                                                                            (self.condensed_output_df['True Values Crystal System'] != cry_sys)]
-        wrong_cry_sys_prediction_ids = test_set_cry_sys_mispredictions.mat_id.to_numpy()
+        # true_cry_sys = self.condensed_output_df.loc[self.condensed_output_df['True Values Crystal System']== cry_sys]
+        # true_cry_sys_ids = true_cry_sys.mat_id.to_numpy()
+        # test_cry_sys_correct_predictions = self.condensed_output_df.loc[(self.condensed_output_df['Aggregate Predictions Crystal System'] == cry_sys) & 
+        #                                                                       (self.condensed_output_df['True Values Crystal System'] == cry_sys)]
+        # correct_cry_sys_ids = test_cry_sys_correct_predictions.mat_id.to_numpy()
+        # test_set_cry_sys_mispredictions = self.condensed_output_df.loc[(self.condensed_output_df['Aggregate Predictions Crystal System'] == cry_sys) & 
+        #                                                                     (self.condensed_output_df['True Values Crystal System'] != cry_sys)]
+        # wrong_cry_sys_prediction_ids = test_set_cry_sys_mispredictions.mat_id.to_numpy()
 
         # if cry_sys == 'orthorhombic': 
         #     self.visualize_space_group_results_mat_id(cry_sys, material_id = 'all', show_plots = False, use_scaled = True)
@@ -746,10 +746,10 @@ class RF_Diffraction_model():
 
 
 
-        universal_cry_sys_test_ids = []
-        for mat_id in correct_cry_sys_ids:
-            universal_cry_sys_test_ids.append(mat_id)
-        print(len(universal_cry_sys_test_ids))
+        # universal_cry_sys_test_ids = []
+        # for mat_id in correct_cry_sys_ids:
+        #     universal_cry_sys_test_ids.append(mat_id)
+        # print(len(universal_cry_sys_test_ids))
 
         # for i in integers_to_use:
             # universal_cry_sys_test_ids.append(wrong_cry_sys_prediction_ids[i])
@@ -761,13 +761,17 @@ class RF_Diffraction_model():
         #     print('loaded successfully')        
 
         # except:
-        for mat_id in wrong_cry_sys_prediction_ids:
-            universal_cry_sys_test_ids.append(mat_id)
+        # for mat_id in wrong_cry_sys_prediction_ids:
+        #     universal_cry_sys_test_ids.append(mat_id)
 
-        cry_sys_test_df = pd.DataFrame(columns = self.full_df.columns)
-        for mat_id in universal_cry_sys_test_ids:
-            # print(mat_id)
-            subdf = self.output_df.loc[self.output_df.mat_id == mat_id]
+        pred_cry_sys = self.condensed_output_df.loc[(self.condensed_output_df['Aggregate Predictions Crystal System'] == cry_sys)]
+        cry_sys_test_df = pd.DataFrame(columns = self.output_df.columns)
+        for q in tqdm(range(0, len(pred_cry_sys))):
+            row = pred_cry_sys.iloc[q]
+            full_df_vals = row['Full Df Indicies']
+            # print(len(full_df_vals))
+            subdf = self.output_df.loc[self.output_df['Full DF Indicies'].isin(full_df_vals)]  
+            # print(len(subdf))
             cry_sys_test_df = pd.concat([cry_sys_test_df, subdf])
         # cry_sys_test_df.to_pickle('Model_data/Space_group_inputs_and_outputs/SG_'+cry_sys+'_cry_sys_test_df.pkl')
 
@@ -806,7 +810,8 @@ class RF_Diffraction_model():
 
         trees = self.space_group_rf_output[2].estimators_
         predictions_full = []
-        for tree in trees:
+        for t in tqdm(range(len(trees))):
+            tree = trees[t]
             predictions_full.append(tree.predict(np.asarray(cry_sys_use)))
         predictions_ordered = np.asarray(predictions_full).T
 
@@ -830,6 +835,7 @@ class RF_Diffraction_model():
             # print(mat_id)
             subdf = cry_sys_test_df.loc[cry_sys_test_df.mat_id == mat_id]
             out_df = generate_diff_aggregate_space_group(cry_sys, subdf, show_plots = False)
+            self.out_df = out_df
             FINAL_cry_sys_test_df = pd.concat([FINAL_cry_sys_test_df, out_df])
 
 
@@ -1583,13 +1589,14 @@ class RF_Diffraction_model():
         self.condensed_output_df['true_c'] = c_trues
 
     
-    def condense_crystal_system_output(self, method = 'naive', load_from_path = False, path = None, num = 100):
+    def condense_crystal_system_output(self, method = 'Difference Aggregation', load_from_path = False, path = None, num = 10):
         if load_from_path == False:
             ids = self.output_df.mat_id.unique()
             final_full_out_df = pd.DataFrame(columns = ['mat_id', 'True Values Crystal System', 'Full Predictions Crystal System', 
                                                         'Aggregate Predictions Crystal System', 'Prediction Confidence', 'Full Df Indicies'])
 
         if method == 'naive':
+            raise ValueError
             for mat in ids:    
                 print(mat)
                 subdf = self.output_df.loc[self.output_df['mat_id'] == mat]
@@ -1609,6 +1616,7 @@ class RF_Diffraction_model():
                 final_full_out_df = pd.concat([final_full_out_df, full_out_df])
         
         if method == 'Full Histogram':
+            raise ValueError
             for mat in ids:    
                 print(mat)
                 subdf = self.output_df.loc[self.output_df['mat_id'] == mat]
@@ -1630,7 +1638,8 @@ class RF_Diffraction_model():
             
             
         if method == 'Weighted Aggregation':
-            for mat in ids:    
+            raise ValueError
+            for mat in ids:
                 print(mat)
                 subdf = self.output_df.loc[self.output_df['mat_id'] == mat]
                 
@@ -1679,12 +1688,12 @@ class RF_Diffraction_model():
                     joblib.dump(self.condensed_output_df, path)
             
             else:
-                for mat in ids:    
-                    print(mat)
+                for m in tqdm(range(len(ids))):    
+                    mat = ids[m]
                     subdf = self.output_df.loc[self.output_df['mat_id'] == mat]
                     subdf.reset_index(inplace = True)
                     subdf.drop('index', axis=1, inplace = True)
-                    inds = np.random.randint(0,100,num)
+                    inds = np.random.choice(100, num, replace=False)
                     subdf = subdf.iloc[inds]
                     subdf.reset_index(inplace = True)
                     subdf.drop('index', axis=1, inplace = True)
@@ -1802,7 +1811,7 @@ class RF_Diffraction_model():
         if show_all_materials == True:
 
             try: 
-                with open('cm_ag_percent.pkl', 'rb') as f:
+                with open('crystal_system_inputs_and_outputs/cm_ag_percent.pkl', 'rb') as f:
                     df_cm = pickle.load(f)
             except:
                 print('file not found')
@@ -1865,16 +1874,17 @@ class RF_Diffraction_model():
             crystal_sys_alph = ['C', 'H', 'Tr','Te', 'M', 'O']
             df_cm = pd.DataFrame(cm, crystal_sys_alph, crystal_sys_alph)
 
+            print(df_cm)
 
             ax = sn.heatmap(df_cm, annot=True, cmap = 'Blues', vmin = 0.0, vmax = 23, cbar_kws={"ticks":[0.0,5,10,15,20], "location":'bottom', 
                                                                                              "fraction":0.2, 'pad':0.1, 'label':'Percent Test Set'})
-            for tick in ax.xaxis.get_major_ticks():
-                tick.label.set_fontsize(42)
+            # for tick in ax.xaxis.get_major_ticks():
+            #     tick.label.set_fontsize(42)
 
-            ax.tick_params(rotation=0)
+            # ax.tick_params(rotation=0)
 
-            for tick in ax.yaxis.get_major_ticks():
-                tick.label.set_fontsize(42)
+            # for tick in ax.yaxis.get_major_ticks():
+            #     tick.label.set_fontsize(42)
             # ax.set_title('Confusion Matrix with labels\n', fontsize = 36);
             ax.set_xlabel('Predicted Values', fontsize = 46)
             ax.set_ylabel('Actual Values ', fontsize = 46)
@@ -1976,13 +1986,13 @@ class RF_Diffraction_model():
 
             ax = sn.heatmap(df_cm, annot=True, vmin=0.0, vmax=100, cmap = newcmp, cbar_kws={"location":'bottom', 
                                                                                              "fraction":0.2, 'pad':0.1, 'label':'Percent Trees/Patterns'})
-            for tick in ax.xaxis.get_major_ticks():
-                tick.label.set_fontsize(42)
+            # for tick in ax.xaxis.get_major_ticks():
+            #     tick.label.set_fontsize(42)
 
             ax.tick_params(rotation=0)
 
-            for tick in ax.yaxis.get_major_ticks():
-                tick.label.set_fontsize(42)
+            # for tick in ax.yaxis.get_major_ticks():
+                # tick.label.set_fontsize(42)
             # ax.set_title('Confusion Matrix with labels\n', fontsize = 36);
             ax.set_xlabel('Predicted Values', fontsize = 46)
             ax.set_ylabel('Actual Values ', fontsize = 46)
@@ -2180,17 +2190,19 @@ class RF_Diffraction_model():
         
 
         
-    def load_submodels_space_group(self, crystal_system):
+    def load_submodels_space_group(self, crystal_system, regen_inputs = True):
         print('starting')
-        self.space_group_rf_output = joblib.load('Space_group_models/'+crystal_system+'_space_group_model.joblib')
-        with open('Crystal_sys_dataframes/full_data_'+crystal_system+'.pkl', 'rb') as f:
+        
+        self.space_group_rf_output = joblib.load('Data/Space_group_models/'+crystal_system+'_space_group_model.joblib')
+        with open('Data/Crystal_sys_dataframes/full_data_'+crystal_system+'.pkl', 'rb') as f:
             self.space_group_radial_df = pickle.load(f)
         print('loaded dfs')
-        self.space_group_radial_inputs = self.space_group_prepare_training_and_test(self.space_group_radial_df,
-                                                                  split_by_material=True)
-        self.space_group_radial_inputs[3] = self.space_group_radial_inputs[3].reset_index()
-        self.space_group_radial_inputs[3].drop(columns = ['index'], axis = 1, inplace = True)
-
+        if regen_inputs:
+            self.space_group_radial_inputs = self.space_group_prepare_training_and_test(self.space_group_radial_df,
+                                                                      split_by_material=True)
+            self.space_group_radial_inputs[3] = self.space_group_radial_inputs[3].reset_index()
+            self.space_group_radial_inputs[3].drop(columns = ['index'], axis = 1, inplace = True)
+    
         self.loaded_submodels_space_group = [True, crystal_system]
 
 

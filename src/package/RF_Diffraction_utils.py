@@ -16,9 +16,9 @@ import seaborn as sn
 import joblib
 import sys
 from sklearn.metrics import log_loss
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from pymatgen.symmetry.groups import PointGroup, SpaceGroup
-from mp_api.client import MPRester
+# from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+# from pymatgen.symmetry.groups import PointGroup, SpaceGroup
+# from mp_api.client import MPRester
 import matplotlib as mpl
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import scipy
