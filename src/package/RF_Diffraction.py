@@ -122,7 +122,7 @@ def generate_diff_aggregate_space_group(cry_sys, subdf, show_plots = True, inclu
 
 
 class RF_Diffraction_model():
-    def __init__(self, full_df_filepath, subdf_filepaths, output_df=None):
+    def __init__(self, full_df_filepath=None, subdf_filepaths=None, output_df=None):
         self.full_df_filepath = full_df_filepath
         self.full_df = None
         self.subdf_filepaths = subdf_filepaths
@@ -946,8 +946,6 @@ class RF_Diffraction_model():
                 cry_sys_subdf = self.condensed_output_df.loc[self.condensed_output_df[cry_sys_type] == cry_sys]
                 # mean_per_pattern = []
                 # for i in np.asarray(output_df.loc[output_df[cry_sys_type] == cry_sys][col+'_'+char]):
-                    # if prediction_type == 'Mode':
-                        # todo finish
 
                 if prediction_type == 'Median':
                     mean_per_pattern = np.asarray(self.condensed_output_df.loc[self.condensed_output_df[cry_sys_type] == cry_sys][col+'_'+char])
