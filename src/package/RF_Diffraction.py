@@ -378,12 +378,12 @@ class RF_Diffraction_model():
         for cry_sys in ['trigonal', 'hexagonal', 'monoclinic', 'orthorhombic', 'tetragonal', 'cubic']:    
         # for cry_sys in ['cubic']:
             print(cry_sys)
-            rf_model = joblib.load('Model_data/Lattice_inputs_and_outputs/' +cry_sys+'_lattice_model.joblib')[2]
+            rf_model = joblib.load('data/Lattice_param_models/' +cry_sys+'_lattice_model.joblib')
             print('model loaded')
             trees = rf_model.estimators_
             # for k in range(0, len(df)):
             count = 0
-            for k in range(0, len(self.condensed_output_df)):
+            for k in tqdm(range(0, len(self.condensed_output_df))):
                 row = self.condensed_output_df.iloc[k]
                 if row['Aggregate Predictions Crystal System'] == cry_sys:
                     full_df_vals = row['Full Df Indicies']
@@ -1573,11 +1573,10 @@ class RF_Diffraction_model():
         a_trues = []
         b_trues = []
         c_trues = []
-        for i in range(0, len(self.output_df)):
+        for i in tqdm(range(0, len(self.output_df))):
             row = self.output_df.iloc[i]
             mat_id = row['mat_id']
             if mat_id not in ids:
-                print(i)
                 ids.append(row['mat_id'])
                 a_trues.append(row['a'])
                 b_trues.append(row['b'])
