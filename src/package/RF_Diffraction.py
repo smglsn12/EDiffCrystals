@@ -1021,9 +1021,9 @@ class RF_Diffraction_model():
                 plt.legend(fontsize = 18)
                 if savenp:
                     np.save('10_aggregate_'+cry_sys+'_'+char+'.npy', np.asarray([true_val_acc, mean_per_pattern_acc, true_val_inacc,
-                                                                                       mean_per_pattern_inacc]))
+                                                                                       mean_per_pattern_inacc], dtype = object))
                 if savefig:
-                    plt.savefig('Figures/Figure SI R2 Aggregate/R2_plot_' + cry_sys + '_' + char + '.pdf', bbox_inches="tight", transparent=True)
+                    plt.savefig('R2_plot_' + cry_sys + '_' + char + '.pdf', bbox_inches="tight", transparent=True)
                 plt.show()        
 
             if show_hists:
@@ -1062,7 +1062,7 @@ class RF_Diffraction_model():
                 if cry_sys == 'cubic':
                     plt.ylabel('Frequency', fontsize=42)
                 if savefig:
-                    plt.savefig('Figures/Figure SI Error Hist Aggregate/MAE_plot_' + cry_sys + '_' + char + '.pdf', bbox_inches="tight", transparent=True)
+                    plt.savefig('MAE_plot_' + cry_sys + '_' + char + '.pdf', bbox_inches="tight", transparent=True)
                 plt.show()
 
         return cry_sys_subdf
@@ -2391,7 +2391,7 @@ def Complex2RGB_transparent(complex_array, vmin=None, vmax=None, hue_start=90, t
     
     return rgba
 
-def visualize_radial_components(model_object, zone, radial_params = [[12, 6]], include_y_label = True, include_x_label = True,):
+def visualize_radial_components(model_object, mp_id, zone, radial_params = [[12, 6]], include_y_label = True, include_x_label = True,):
         
     k = np.linspace(-2.4, 2.4, 201)
     kya, kxa = np.meshgrid(k,k)
@@ -2401,7 +2401,7 @@ def visualize_radial_components(model_object, zone, radial_params = [[12, 6]], i
     # k_max spaced by dk = num radials 
     # order max (0 to order max) = number of oscillations
     basis = construct_basis(kxa, kya, k_max, dk, order_max, False)
-    fig, ax = model_object.show_specific_pattern('mp-1001786', zone = zone, 
+    fig, ax = model_object.show_specific_pattern(mp_id, zone = zone, 
                                                 include_y_label = include_y_label, include_x_label = include_x_label)
     if include_y_label:
         ax.set_yticks((-2, -1, 0, 1, 2))
