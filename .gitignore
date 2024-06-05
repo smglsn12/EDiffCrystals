@@ -162,3 +162,4 @@ cython_debug/
 *.joblib
 *.pkl
 *.pdf
+/src/EDiffCrystals/analysis_dataset00_TEST_braggdisks_cali.h5
