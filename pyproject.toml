@@ -5,12 +5,19 @@ build-backend = "hatchling.build"
 [project]
 name = "EDiffCrystals"
 dependencies = [
-
+    'numpy',
+    'matplotlib',
+    'scikit-learn==1.2.1',
+    'py4DSTEM==0.14.8',
+    'pandas',
+    'joblib',
+    'seaborn',
+    'scipy',
 ]
 dynamic = ["version"]
 
 [tool.setuptools.dynamic]
-version = {attr = "package.__version__"}
+version = {attr = "EDiffCrystals.__version__"}
 
 [tool.hatchling.requires]
 python = ">=3.9"
@@ -21,7 +28,7 @@ python = ">=3.9"
 allow-direct-references = true
 
 [tool.hatch.version]
-path = "src/package/__init__.py"
+path = "src/EDiffCrystals/__init__.py"
 
 [tool.black]
 line-length = 88
