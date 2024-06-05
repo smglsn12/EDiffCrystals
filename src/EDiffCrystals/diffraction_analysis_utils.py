@@ -27,6 +27,9 @@ from tqdm import tqdm
 def flatten(list1):
     return [item for sublist in list1 for item in sublist]
 
+def hello_world():
+    print('hello world')
+
 
 def test_radial_representation(df, indicies, thicknesses, df_only_radial=None):
     df_copy = df.copy()
@@ -170,8 +173,10 @@ def clean_and_scale_pls(pls, sum_scaling=0.3, num_spots_needed=5, remove_central
 
     pl_indicies = []
     scaled_patterns = []
-    for i in tqdm(range(pls.shape[0])):
-        for j in range(pls.shape[1]):
+    # for i in tqdm(range(pls.shape[0])):
+    for i in tqdm(range(0,4)):
+        # for j in range(pls.shape[1]):
+        for j in tqdm(range(0,4)):
             pattern = pls.cal[i, j]
             if len(pattern.data['intensity']) >= num_spots_needed:
                 pattern.data['intensity'] = pattern.data['intensity'] / (sum(pattern.data['intensity']) / sum_scaling)

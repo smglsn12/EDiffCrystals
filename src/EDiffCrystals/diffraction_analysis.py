@@ -22,7 +22,7 @@ from scipy.signal import medfilt
 from matplotlib.lines import Line2D
 from scipy.signal import convolve2d
 from scipy.ndimage import gaussian_filter
-import diffraction_analysis_utils as dau
+from EDiffCrystals import diffraction_analysis_utils as dau
 
 class Diffraction_Analysis():
     def __init__(self, pl_filepath, model_path_dict):
