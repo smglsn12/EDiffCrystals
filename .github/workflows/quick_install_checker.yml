@@ -32,7 +32,7 @@ jobs:
                 python -m pip install .
             - name: Check installation
               run: |
-                python -c "import package; print(package.__version__)"
+                python -c "import EDiffCrystals; print(EDiffCrystals.__version__)"
             # - name: Check machine arch
             #   run: |
             #     python -c "import platform; print(platform.machine())"
