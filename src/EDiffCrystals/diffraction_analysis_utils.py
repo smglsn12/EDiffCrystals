@@ -27,9 +27,6 @@ from tqdm import tqdm
 def flatten(list1):
     return [item for sublist in list1 for item in sublist]
 
-def hello_world():
-    print('hello world')
-
 
 def test_radial_representation(df, indicies, thicknesses, df_only_radial=None):
     df_copy = df.copy()
