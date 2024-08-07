@@ -22,7 +22,8 @@ from scipy.signal import medfilt
 from matplotlib.lines import Line2D
 from scipy.signal import convolve2d
 from scipy.ndimage import gaussian_filter
-from EDiffCrystals import diffraction_analysis_utils as dau
+# from EDiffCrystals import diffraction_analysis_utils as dau
+import diffraction_analysis_utils as dau
 
 class Diffraction_Analysis():
     def __init__(self, pl_filepath, model_path_dict):
@@ -180,7 +181,7 @@ class Diffraction_Analysis():
 
                 print('median ' + str(median))
                 print('mean ' + str(mean))
-                plt.vlines(median, min(hist[0]), max(hist[0]))
+                plt.vlines(median, min(hist[0]), max(hist[0]), color = 'red', zorder = 10, linewidth = 3)
                 plt.title(param + ' Axis', fontsize=14)
                 plt.show()
 

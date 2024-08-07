@@ -168,9 +168,11 @@ class RF_Diffraction_model():
         
     def load_cry_sys_ouptut(self):
         print('loading crystal system output')
-        self.rf_output_radial = joblib.load('data/crystal_system_inputs_and_outputs/crystal_system_output.joblib')
-        self.radial_train_ids = joblib.load('data/crystal_system_inputs_and_outputs/radial_inputs_0_5.joblib')
-        self.radial_test_ids = joblib.load('data/crystal_system_inputs_and_outputs/radial_inputs_1_5.joblib')
+        # path_header = 'data/crystal_system_inputs_and_outputs/
+        path_header = "E:/EDiffCrystals/notebooks/data/crystal_system_inputs_and_outputs/"
+        self.rf_output_radial = joblib.load(path_header + 'crystal_system_output.joblib')
+        self.radial_train_ids = joblib.load(path_header + 'radial_inputs_0_5.joblib')
+        self.radial_test_ids = joblib.load(path_header + 'radial_inputs_1_5.joblib')
         print('crystal system output loaded')
         
         
@@ -180,19 +182,24 @@ class RF_Diffraction_model():
         if reset_output_df:
             self.rf_output_radial = None
         
-        if type(self.rf_output_radial) == type(None): 
+        if type(self.output_df) == type(None): 
             self.load_cry_sys_ouptut()
         
-        predictions_ordered = self.rf_output_radial[0]
-        pred_crystal_system = self.rf_output_radial[1]
-        rf_model = self.rf_output_radial[2]
-        
-        test_indicies = self.full_df.loc[self.full_df['mat_id'].isin(self.radial_test_ids)].index 
-                
-        
-        labels_test_cry_sys = np.asarray(self.full_df.iloc[test_indicies]['crystal system'])
-        mp_ids = np.asarray(self.full_df.iloc[test_indicies]['mat_id'])
+            predictions_ordered = self.rf_output_radial[0]
+            pred_crystal_system = self.rf_output_radial[1]
+            rf_model = self.rf_output_radial[2]
+            
+            test_indicies = self.full_df.loc[self.full_df['mat_id'].isin(self.radial_test_ids)].index 
+                    
+            
+            labels_test_cry_sys = np.asarray(self.full_df.iloc[test_indicies]['crystal system'])
+            mp_ids = np.asarray(self.full_df.iloc[test_indicies]['mat_id'])
 
+        else:
+            predictions_ordered = self.output_df['Full Predictions Crystal System'].to_numpy()
+            pred_crystal_system = self.output_df['Predictions Crystal System'].to_numpy()
+            labels_test_cry_sys = self.output_df['True Values Crystal System'].to_numpy()
+        
         cm = confusion_matrix(labels_test_cry_sys, pred_crystal_system, labels = ['cubic', 'hexagonal', 'trigonal', 'tetragonal', 'monoclinic', 'orthorhombic'])
         trues = 0
         for i in range(0, len(cm)):
@@ -246,7 +253,8 @@ class RF_Diffraction_model():
         # crystal_sys_alph = ['cubic', 'hexagonal', 'monoclinic', 'orthorhombic', 'tetragonal', 'trigonal']
         crystal_sys_alph = ['cubic', 'hexagonal', 'trigonal', 'tetragonal', 'monoclinic', 'orthorhombic']           
         
-        if os.path.exists('data/crystal_system_inputs_and_outputs/prediction_matrix_confidence.npy') == False:
+        if os.path.exists('prediction_matrix_confidence.npy') == False:
+            rf_model = joblib.load('C:/Users/smgls/repos/EDiffCrystals/models/Random_Forest_Models/crystal_system_model.joblib')
             predictions_matrix = []
 
             for j in range(0, len(crystal_sys_alph)):
@@ -262,7 +270,8 @@ class RF_Diffraction_model():
             for i in range(0, len(predictions_ordered)):
                 prediction_ordered_crystal_system = []
                 for j in predictions_ordered[i]:
-                    prediction_ordered_crystal_system.append(rf_model.classes_[int(j)])
+                    # prediction_ordered_crystal_system.append(rf_model.classes_[int(j)])
+                    prediction_ordered_crystal_system.append(j)
 
                 prediction_ordered_cry_sys = prediction_ordered_crystal_system
 
@@ -290,7 +299,7 @@ class RF_Diffraction_model():
             # np.save('Model_data/Crystal_sys_outputs/prediction_matrix_confidence.npy', predictions_matrix)  
         
         else:
-            predictions_matrix = np.load('data/crystal_system_inputs_and_outputs/prediction_matrix_confidence.npy')
+            predictions_matrix = np.load('prediction_matrix_confidence.npy')
         # crystal_sys_alph = ['C', 'H', 'M', 'O', 'Te', 'Tr']
         crystal_sys_alph = ['C', 'H', 'Tr', 'Te', 'M', 'O']
 
