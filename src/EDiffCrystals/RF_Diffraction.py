@@ -178,53 +178,58 @@ class RF_Diffraction_model():
         
     def show_cm_and_uncertianty_individual_prediction(self, show_cm = False, show_uncertianty = False, savefigure = False, reset_output_df = False,
                                                      figure_path = []):
-        
-        if reset_output_df:
-            self.rf_output_radial = None
-        
-        if type(self.output_df) == type(None): 
-            self.load_cry_sys_ouptut()
-        
-            predictions_ordered = self.rf_output_radial[0]
-            pred_crystal_system = self.rf_output_radial[1]
-            rf_model = self.rf_output_radial[2]
-            
-            test_indicies = self.full_df.loc[self.full_df['mat_id'].isin(self.radial_test_ids)].index 
-                    
-            
-            labels_test_cry_sys = np.asarray(self.full_df.iloc[test_indicies]['crystal system'])
-            mp_ids = np.asarray(self.full_df.iloc[test_indicies]['mat_id'])
 
-        else:
-            predictions_ordered = self.output_df['Full Predictions Crystal System'].to_numpy()
-            pred_crystal_system = self.output_df['Predictions Crystal System'].to_numpy()
-            labels_test_cry_sys = self.output_df['True Values Crystal System'].to_numpy()
-        
-        cm = confusion_matrix(labels_test_cry_sys, pred_crystal_system, labels = ['cubic', 'hexagonal', 'trigonal', 'tetragonal', 'monoclinic', 'orthorhombic'])
-        trues = 0
-        for i in range(0, len(cm)):
-            trues += cm[i][i]
-        
-        accuracy = trues/len(pred_crystal_system)
-        print('crystal system ' + str(accuracy))
-        
-        cm = cm/len(pred_crystal_system)
-        for i in range(0, len(cm)):
-            for j in range(0, len(cm[0])):
-                cm[i][j] = round(cm[i][j]*100, 1)
-            
+        try:
+            with open('data/individual_pattern_df_cm_percent.pkl', 'rb') as f:
+                df_cm = pickle.load(f)
 
-        
-        accuracy = trues/len(pred_crystal_system)
-        print('point group ' + str(accuracy))
-        # crystal_sys_alph = ['C', 'H', 'M', 'O', 'Te', 'Tr']
-        crystal_sys_alph = ['C', 'H', 'Tr', 'Te', 'M', 'O']
+        except:
+            if reset_output_df:
+                self.rf_output_radial = None
+
+            if type(self.output_df) == type(None):
+                self.load_cry_sys_ouptut()
+
+                predictions_ordered = self.rf_output_radial[0]
+                pred_crystal_system = self.rf_output_radial[1]
+                # rf_model = self.rf_output_radial[2]
+
+                test_indicies = self.full_df.loc[self.full_df['mat_id'].isin(self.radial_test_ids)].index
 
 
-        df_cm = pd.DataFrame(cm, crystal_sys_alph, crystal_sys_alph)
-        
-        # df_cm.to_pickle('df_cm_percent_unrounded.pkl')
-        
+                labels_test_cry_sys = np.asarray(self.full_df.iloc[test_indicies]['crystal system'])
+                mp_ids = np.asarray(self.full_df.iloc[test_indicies]['mat_id'])
+
+            else:
+                predictions_ordered = self.output_df['Full Predictions Crystal System'].to_numpy()
+                pred_crystal_system = self.output_df['Predictions Crystal System'].to_numpy()
+                labels_test_cry_sys = self.output_df['True Values Crystal System'].to_numpy()
+
+            cm = confusion_matrix(labels_test_cry_sys, pred_crystal_system, labels = ['cubic', 'hexagonal', 'trigonal', 'tetragonal', 'monoclinic', 'orthorhombic'])
+            trues = 0
+            for i in range(0, len(cm)):
+                trues += cm[i][i]
+
+            accuracy = trues/len(pred_crystal_system)
+            print('crystal system ' + str(accuracy))
+
+            cm = cm/len(pred_crystal_system)
+            for i in range(0, len(cm)):
+                for j in range(0, len(cm[0])):
+                    cm[i][j] = round(cm[i][j]*100, 1)
+
+
+
+            accuracy = trues/len(pred_crystal_system)
+            print('point group ' + str(accuracy))
+            # crystal_sys_alph = ['C', 'H', 'M', 'O', 'Te', 'Tr']
+            crystal_sys_alph = ['C', 'H', 'Tr', 'Te', 'M', 'O']
+
+
+            df_cm = pd.DataFrame(cm, crystal_sys_alph, crystal_sys_alph)
+
+            df_cm.to_pickle('individual_pattern_df_cm_percent.pkl')
+
         # print(df_cm)
 
         plt.figure(figsize=(15, 20))
@@ -250,11 +255,10 @@ class RF_Diffraction_model():
         plt.show()
 
         
-        # crystal_sys_alph = ['cubic', 'hexagonal', 'monoclinic', 'orthorhombic', 'tetragonal', 'trigonal']
-        crystal_sys_alph = ['cubic', 'hexagonal', 'trigonal', 'tetragonal', 'monoclinic', 'orthorhombic']           
+        crystal_sys_alph = ['cubic', 'hexagonal', 'trigonal', 'tetragonal', 'monoclinic', 'orthorhombic']
         
-        if os.path.exists('prediction_matrix_confidence.npy') == False:
-            rf_model = joblib.load('C:/Users/smgls/repos/EDiffCrystals/models/Random_Forest_Models/crystal_system_model.joblib')
+        if os.path.exists('data/individual_pattern_prediction_matrix_confidence.npy') == False:
+            # rf_model = joblib.load('C:/Users/smgls/repos/EDiffCrystals/models/Random_Forest_Models/crystal_system_model.joblib')
             predictions_matrix = []
 
             for j in range(0, len(crystal_sys_alph)):
@@ -268,6 +272,8 @@ class RF_Diffraction_model():
             predictions_ordered_cry_sys_full = []
 
             for i in range(0, len(predictions_ordered)):
+                if i in np.linspace(0, 1000000, 101):
+                    print(i)
                 prediction_ordered_crystal_system = []
                 for j in predictions_ordered[i]:
                     # prediction_ordered_crystal_system.append(rf_model.classes_[int(j)])
@@ -296,10 +302,10 @@ class RF_Diffraction_model():
                     else:
                         predictions_matrix[k][l] = np.mean(predictions_matrix[k][l])
 
-            # np.save('Model_data/Crystal_sys_outputs/prediction_matrix_confidence.npy', predictions_matrix)  
+            np.save('individual_pattern_prediction_matrix_confidence.npy', predictions_matrix)
         
         else:
-            predictions_matrix = np.load('prediction_matrix_confidence.npy')
+            predictions_matrix = np.load('data/individual_pattern_prediction_matrix_confidence.npy')
         # crystal_sys_alph = ['C', 'H', 'M', 'O', 'Te', 'Tr']
         crystal_sys_alph = ['C', 'H', 'Tr', 'Te', 'M', 'O']
 
