@@ -18,7 +18,7 @@ from sklearn.metrics import log_loss
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.symmetry.groups import PointGroup, SpaceGroup
 from mp_api.client import MPRester
-from RF_Functions import *
+from RF_Diffraction_utils import *
 
 
 print('starting')

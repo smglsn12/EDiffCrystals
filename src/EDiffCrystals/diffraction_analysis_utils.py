@@ -29,6 +29,9 @@ def flatten(list1):
 
 
 def test_radial_representation(df, indicies, thicknesses, df_only_radial=None):
+    """
+    ensure the radial basis has been generated correctly
+    """
     df_copy = df.copy()
     if type(df_only_radial) == type(None):
         output_list = []
@@ -90,10 +93,7 @@ def test_radial_representation(df, indicies, thicknesses, df_only_radial=None):
 
 def construct_basis(kx, ky, k_max, dk, order_max, sine_basis=False):
     """
-
-
-    Placeholder
-
+    construct complex radial representation of electron diffraction patterns expressed as bragg lists
     """
     # k bin boundaries starts at zero extends to kmax
     k_bins = np.arange(0, k_max + dk, dk)
@@ -134,6 +134,10 @@ def construct_basis(kx, ky, k_max, dk, order_max, sine_basis=False):
 
 
 def calc_basis_scaled_df(bragg_list, k_max, dk, order_max, sine_basis=False, remove_central_beam=True):
+    """
+    build radial basis set for pattern decomposition into a radial basis representation
+    """
+
     new_bragg_list = deepcopy(bragg_list)  # create a copy # probably not needed
 
     if remove_central_beam:
@@ -158,6 +162,11 @@ def calc_basis_scaled_df(bragg_list, k_max, dk, order_max, sine_basis=False, rem
 
 
 def visualize_specific_pattern(point_lists, index, intensity_scaling=0.3):
+
+    """
+    display specific electron diffraction pattern represented as a bragg list
+    """
+
     pl = point_lists.cal[index[0], index[1]]  # indvidual pointlist qx,qy,ints
     pl.data['intensity'] = pl.data['intensity'] / (sum(pl.data['intensity']) / intensity_scaling)
     fig, ax = plot_diffraction_pattern(pl, returnfig=True)
@@ -165,15 +174,19 @@ def visualize_specific_pattern(point_lists, index, intensity_scaling=0.3):
 
 
 def clean_and_scale_pls(pls, sum_scaling=0.3, num_spots_needed=5, remove_central_beam=True):
+    """
+    scale and clean point lists before inputting to the crystal structure prediction models
+    """
+
     print('scaling patterns to sum intensity = ' + str(sum_scaling) + ' and filtering out patterns with fewer than '
           + str(num_spots_needed) + ' diffraction spots')
 
     pl_indicies = []
     scaled_patterns = []
-    # for i in tqdm(range(pls.shape[0])):
-    for i in tqdm(range(0,4)):
-        # for j in range(pls.shape[1]):
-        for j in tqdm(range(0,4)):
+    for i in tqdm(range(pls.shape[0])):
+    # for i in tqdm(range(0,4)):
+        for j in range(pls.shape[1]):
+        # for j in tqdm(range(0,4)):
             pattern = pls.cal[i, j]
             if len(pattern.data['intensity']) >= num_spots_needed:
                 pattern.data['intensity'] = pattern.data['intensity'] / (sum(pattern.data['intensity']) / sum_scaling)
@@ -196,6 +209,10 @@ def clean_and_scale_pls(pls, sum_scaling=0.3, num_spots_needed=5, remove_central
 
 
 def add_confidences_to_pred_df(df_with_predictions, num_trees=80):
+    """
+    update the dataframe with predictions to include prediction confidences determined by probing the predictions of
+    the individual decision tree models in the random forest
+    """
     new_df_with_predictions = df_with_predictions.copy()
 
     predictions_diff_confidence = []
@@ -377,7 +394,10 @@ def load_output_data(save_path):
     return pred_df
 
 def build_input_vector(patterns_vec):
-    # run an array of vectorized patterns through here - will calculate angle/abs and turn into 1d array
+    """
+    converts the complex radial basis representation into absolute value and angle and generates a 1D array suitable
+    for prediction with the crystal structure prediction models.
+    """
 
     new_input_test = []
     for test in patterns_vec:
@@ -404,6 +424,9 @@ def build_input_vector(patterns_vec):
 def predict_exp_patterns(cry_sys_model, vectorized_array_of_patterns, list_of_labels_for_patterns,
                          pl_indicies_reference, lattice_model_dict,
                          cry_sys_lattice):
+    """
+    predict the crystal structure of a set of experimental electron diffraction patterns
+    """
     print('starting')
     if type(list_of_labels_for_patterns) == type(None):
         list_of_labels_for_patterns = []
@@ -508,6 +531,10 @@ def predict_exp_patterns(cry_sys_model, vectorized_array_of_patterns, list_of_la
     return out_df
 
 def generate_lattice_cmap(insert_length = 15, resample_length = 75):
+    """
+    generate a color map for visualizing lattice constant prediction
+    """
+
     turbos = mpl.colormaps['turbo'].resampled(resample_length)
     newcolors = turbos(np.linspace(0, 1, resample_length))
     k = [0, 0, 0, 1]
@@ -524,6 +551,11 @@ def predict_set_of_point_lists(pls, cry_sys_model, pl_filepath, lattice_model_di
                                cry_sys_lattice, sum_scaling=0.3,
                                num_spots_needed=5, remove_central_beam=True,
                                save_df=True, save_path=None):
+
+    """
+    wrapper function for predict_exp_patterns, compiles all prediction data and builds it into a dataframe
+    """
+
     scaled_patterns, pl_indicies = clean_and_scale_pls(pls,
                                                        sum_scaling=sum_scaling,
                                                        num_spots_needed=num_spots_needed,
@@ -561,6 +593,10 @@ def predict_set_of_point_lists(pls, cry_sys_model, pl_filepath, lattice_model_di
 
 
 def visualize_output(df, title, col_to_plot):
+    """
+    visualize the number of times each crystal system is predicted by the model when predicting a set of experimental
+    patterns
+    """
     plt.title(title + ' model value counts', fontsize=12)
     df.prediction.value_counts(normalize=True).plot(kind='bar')
     print(df.prediction.value_counts(normalize=True))
@@ -613,6 +649,10 @@ def confidence_image(
         lattice_color_map=None,
         lattice_param = 'a',
 ):
+    """
+    visualize the crystal system and lattice constant predictions in real space by mapping the prediction on each
+    individual diffraction pattern to its real space location in the 4DSTEM scan
+    """
     df_copy = df_with_predictions.copy()
     # init output
     stack_con = np.zeros((len(cry_sys), im_shape[0], im_shape[1]))
@@ -900,6 +940,9 @@ def threshold_particles(
         plot_result=True,
         sigma=0.0,
 ):
+    """
+    identify each particle in the dark field image and determine the location of its strongest diffraction
+    """
     im = df_image.copy().astype('float')
 
     if sigma > 0:

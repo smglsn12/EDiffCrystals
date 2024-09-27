@@ -22,9 +22,14 @@ from scipy.signal import medfilt
 from matplotlib.lines import Line2D
 from scipy.signal import convolve2d
 from scipy.ndimage import gaussian_filter
-from EDiffCrystals import diffraction_analysis_utils as dau
+# from EDiffCrystals import diffraction_analysis_utils as dau
+import EDiffCrystals.diffraction_analysis_utils as dau
 
 class Diffraction_Analysis():
+    """
+    an object with methods to predict crystal system and lattice constants from an experimental 4DSTEM scan. The
+    4DSTEM scan needs to have been decomposed into a bragg list representation
+    """
     def __init__(self, pl_filepath, model_path_dict):
         self.pl_filepath = pl_filepath
         self.model_path_dict = model_path_dict
@@ -39,23 +44,31 @@ class Diffraction_Analysis():
         self.lattice_cmap = None
 
     def load_pls(self):
+        """
+        load point lists corresponding to 4DSTEM scan
+        """
         print('loading point lists stored at ' + self.pl_filepath)
         self.pls = py4DSTEM.read(self.pl_filepath)
 
     def prep_pls_for_prediction(self, sum_scaling=0.3, num_spots_needed=5, remove_central_beam=True):
-            self.sum_scaling = sum_scaling
-            self.num_spots_needed = num_spots_needed
-            self.remove_central_beam = remove_central_beam
-            self.scaled_patterns, self.pl_indicies = dau.clean_and_scale_pls(
-                                                                            pls=self.pls,
-                                                                            sum_scaling=self.sum_scaling,
-                                                                            num_spots_needed=self.num_spots_needed,
-                                                                            remove_central_beam=self.remove_central_beam
-                                                                            )
+        """
+        scale and clean point lists before inputting to the crystal structure prediction models
+        """
+        self.sum_scaling = sum_scaling
+        self.num_spots_needed = num_spots_needed
+        self.remove_central_beam = remove_central_beam
+        self.scaled_patterns, self.pl_indicies = dau.clean_and_scale_pls(
+                                                                        pls=self.pls,
+                                                                        sum_scaling=self.sum_scaling,
+                                                                        num_spots_needed=self.num_spots_needed,
+                                                                        remove_central_beam=self.remove_central_beam
+                                                                        )
 
     def predict_set_of_point_lists(self, lattice_pred_type = 'all',
                                        save_df=True, save_path=None):
-
+        """
+        input point lists into the hierarchical crystal structure perdiction random forest architecture
+        """
         print('loading crystal system model')
         cry_sys_model = joblib.load(self.model_path_dict['cry_sys'])
         print('crystal system model loaded!')
@@ -91,6 +104,9 @@ class Diffraction_Analysis():
                 self.df_predictions.to_pickle(save_path)
 
     def generate_lattice_cmap(self, insert_length = 15, resample_length = 75):
+        """
+        generate a color map for visualizing lattice constant prediction
+        """
         self.lattice_cmap = dau.generate_lattice_cmap(insert_length, resample_length)
 
 
@@ -108,7 +124,10 @@ class Diffraction_Analysis():
                                          figure_path = '',
                                          lattice_param = 'a',
                                         ):
-
+        """
+        visualize the crystal system prediction in real space by mapping the prediction on each individual diffraction
+        pattern to its real space location in the 4DSTEM scan
+        """
         if len(c_vals) == 0:
             c_vals = np.array([
                 [1, 20 / 255, 20 / 255],
@@ -142,6 +161,11 @@ class Diffraction_Analysis():
                                                            'orthorhombic', 'monoclinic'),
                                         lattice_params = ('a', 'b', 'c'),
                                         bin_width = 0.1):
+        """
+        visualize the lattice parameter prediction in real space by mapping the prediction on each individual
+        diffraction pattern to its real space location in the 4DSTEM scan
+        """
+
         lattice_mask = np.zeros((im_shape[0], im_shape[1]))
         for a1 in range(3):
             temp = self.stack_con[a1, :, :] > 0
@@ -180,7 +204,7 @@ class Diffraction_Analysis():
 
                 print('median ' + str(median))
                 print('mean ' + str(mean))
-                plt.vlines(median, min(hist[0]), max(hist[0]))
+                plt.vlines(median, min(hist[0]), max(hist[0]), color = 'red', zorder = 10, linewidth = 3)
                 plt.title(param + ' Axis', fontsize=14)
                 plt.show()
 
