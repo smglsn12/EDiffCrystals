@@ -106,6 +106,8 @@ class RF_Diffraction_model():
     def show_cm_and_uncertianty_individual_prediction(self, show_cm = False, show_uncertianty = False,
                                                       savefigure = False, reset_output_df = False,
                                                       visualize_from_saved_data = True, save_cm = False,
+                                                      saved_accuracy_cm='data/individual_pattern_df_cm_percent.pkl',
+                                                      saved_confidence_cm='data/individual_pattern_prediction_matrix_confidence.npy',
                                                      figure_path = []):
 
         """
@@ -115,7 +117,7 @@ class RF_Diffraction_model():
 
         try:
             if visualize_from_saved_data: 
-                with open('data/individual_pattern_df_cm_percent.pkl', 'rb') as f:
+                with open(saved_accuracy_cm, 'rb') as f:
                     df_cm = pickle.load(f)
             else:
                 raise ValueError
@@ -183,8 +185,8 @@ class RF_Diffraction_model():
         crystal_sys_alph = ['cubic', 'hexagonal', 'trigonal', 'tetragonal', 'monoclinic', 'orthorhombic']
 
         if visualize_from_saved_data:
-            if os.path.exists('data/individual_pattern_prediction_matrix_confidence.npy'):
-                predictions_matrix = np.load('data/individual_pattern_prediction_matrix_confidence.npy')
+            if os.path.exists(saved_confidence_cm):
+                predictions_matrix = np.load(saved_confidence_cm)
         
         else:
             # rf_model = joblib.load('C:/Users/smgls/repos/EDiffCrystals/models/Random_Forest_Models/crystal_system_model.joblib')
@@ -1127,8 +1129,7 @@ class RF_Diffraction_model():
             cry_sys_test_df['SG_full_pred'] = sg_full_pred
 
         else:
-            cry_sys_test_df = joblib.load(cry_sys + '_sg_individ_df.joblib')
-
+            cry_sys_test_df = joblib.load('data/Space_group_individual/' + cry_sys + '_sg_individ_df.joblib')
 
         print('Accurate Accuracy')
         acc_df = cry_sys_test_df.loc[cry_sys_test_df['True Values Crystal System'] == cry_sys]
