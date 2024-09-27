@@ -4,21 +4,18 @@ import matplotlib.pyplot as plt
 import matplotlib
 import os
 import itertools as it
-from copy import deepcopy
 import pickle
-from pathlib import Path
 from matplotlib.colors import hsv_to_rgb
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import pandas as pd
 import seaborn as sn
+import math
 import joblib
 import sys
-from sklearn.metrics import log_loss
-# from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-# from pymatgen.symmetry.groups import PointGroup, SpaceGroup
-# from mp_api.client import MPRester
+from sklearn.metrics import r2_score
+
 import matplotlib as mpl
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import scipy
@@ -26,8 +23,649 @@ from scipy.ndimage import gaussian_filter
 plt.rcParams['pdf.fonttype'] = 'truetype'
 sn.set(font_scale=3)
 
+
+def map_predictions(prediction, rf_model=None, list_of_classes=None):
+
+    """
+    link decision tree prediction, given as index, to corresponding class
+    """
+
+    list_of_classes_uncapped = []
+    for c in list_of_classes:
+        c_lower = c.lower()
+        list_of_classes_uncapped.append(c_lower)
+    # print(prediction)
+    if rf_model != None:
+        classes = list(rf_model.classes_)
+        index = classes.index(prediction)
+        return index
+    if list_of_classes_uncapped != None:
+        index = list_of_classes_uncapped.index(prediction)
+        return index
+
+
+def prepare_training_and_test(df, df_type='radial', test_fraction=0.25, column_to_use='200_ang',
+                              quantity='space_group_symbol', split_by_material=True):
+
+    """
+    split diffraction data into train/test sets
+    """
+
+    if df_type == 'radial':
+        col_name = 'radial_' + column_to_use + '_Colin_basis'
+        # col_name = 'radial_' + column_to_use
+
+    if df_type == 'zernike':
+        col_name = 'zernike_' + column_to_use
+
+    input_col = np.asarray(df[col_name])
+    labels = df[quantity]
+
+    if split_by_material:
+        mat_ids = df['mat_id'].unique()
+        dummy_output = np.ones((len(mat_ids)))
+        mat_ids_train, mat_ids_test, dummy_train, dummy_test = train_test_split(mat_ids, dummy_output,
+                                                                                test_size=test_fraction,
+                                                                                random_state=32)
+        print(len(mat_ids_train))
+        print(len(mat_ids_test))
+
+        input_train_first = df.loc[df['mat_id'].isin(mat_ids_train)][col_name]
+        input_test_first = df.loc[df['mat_id'].isin(mat_ids_test)][col_name]
+
+        labels_train = df.loc[df['mat_id'].isin(mat_ids_train)][quantity]
+        labels_test = df.loc[df['mat_id'].isin(mat_ids_test)][quantity]
+
+    else:
+        input_train_first, input_test_first, labels_train, labels_test = train_test_split(input_col, labels,
+                                                                                          test_size=test_fraction,
+                                                                                          random_state=32)
+    if len(input_train_first[0].shape) < 2:
+        input_train_temp = input_train_first
+        input_test_temp = input_test_first
+
+    else:
+        input_train_temp = []
+        count = 0
+        for unit in input_train_first:
+            if count in np.arange(0, 3000000, 10000):
+                print(count)
+            count += 1
+            input_train_temp.append(flatten(unit))
+
+        input_test_temp = []
+        count = 0
+        for unit in input_test_first:
+            if count in np.arange(0, 3000000, 10000):
+                print(count)
+            count += 1
+            input_test_temp.append(flatten(unit))
+
+    input_test_first = None
+    input_train_first = None
+
+    input_train = []
+    count = 0
+    for row in input_train_temp:
+        if count in np.arange(0, 3000000, 10000):
+            print(count)
+        count += 1
+        temp = []
+        abs_i = np.abs(row)
+        angle_i = np.angle(row)
+        for i in range(0, len(abs_i)):
+            temp.append(abs_i[i])
+            temp.append(angle_i[i])
+            # print(temp)
+        input_train.append(np.asarray(temp))
+
+    input_train = np.asarray(input_train)
+
+    count = 0
+    input_test = []
+    for row in input_test_temp:
+        if count in np.arange(0, 3000000, 10000):
+            print(count)
+        count += 1
+        temp = []
+        abs_i = np.abs(row)
+        angle_i = np.angle(row)
+        for i in range(0, len(abs_i)):
+            temp.append(abs_i[i])
+            temp.append(angle_i[i])
+        input_test.append(np.asarray(temp))
+
+    input_test = np.asarray(input_test)
+
+    return [input_train, input_test, labels_train, labels_test]
+
+
+def scale_df_lattice(df, ids_column):
+    """
+    scale lattice constants so a<b<c for orthorhombic crystals
+    """
+    a_s = []
+    b_s = []
+    c_s = []
+    count = -1
+    for mat_id in df[ids_column].unique():
+        count += 1
+        # print(100*count/len(df.ids.unique()))
+        subdf = df.loc[df[ids_column] == mat_id]
+
+        a = np.asarray(subdf[['a', 'b', 'c']]).T[0][0]
+        b = np.asarray(subdf[['a', 'b', 'c']]).T[1][0]
+        c = np.asarray(subdf[['a', 'b', 'c']]).T[2][0]
+
+        lattice_params = [a, b, c]
+        lattice_params.sort()
+
+        reverse_indicies = [2, 1, 0]
+
+        for i in reverse_indicies:
+            if a == lattice_params[i]:
+                for a_entry in np.asarray(subdf[['a', 'b', 'c']]).T[0]:
+                    if i == 2:
+                        a_s.append(a_entry)
+                    if i == 1:
+                        b_s.append(a_entry)
+                    if i == 0:
+                        c_s.append(a_entry)
+
+            elif b == lattice_params[i]:
+                for b_entry in np.asarray(subdf[['a', 'b', 'c']]).T[1]:
+                    if i == 2:
+                        a_s.append(b_entry)
+                    if i == 1:
+                        b_s.append(b_entry)
+                    if i == 0:
+                        c_s.append(b_entry)
+
+            elif c == lattice_params[i]:
+                for c_entry in np.asarray(subdf[['a', 'b', 'c']]).T[2]:
+                    if i == 2:
+                        a_s.append(c_entry)
+                    if i == 1:
+                        b_s.append(c_entry)
+                    if i == 0:
+                        c_s.append(c_entry)
+
+    df['c_sorted'] = a_s
+    df['b_sorted'] = b_s
+    df['a_sorted'] = c_s
+
+    return df
+
+
+def remove_triclinic(inputs, labels):
+
+    """
+    remove triclinic materials from the full dataframe
+    """
+
+    df_inputs = pd.DataFrame(inputs)
+    df_inputs['crystal system'] = np.asarray(labels)
+    df_inputs['radial_dataframe_indicies'] = labels.index
+
+    triclinic_indicies = df_inputs.loc[df_inputs['crystal system'] == 'triclinic'].index
+    print(len(triclinic_indicies))
+    df_no_triclinic = df_inputs.drop(triclinic_indicies)
+    # df_no_triclinic.reset_index(inplace = True)
+    # df_no_triclinic.drop('index', axis = 1, inplace = True)
+    return df_no_triclinic
+
+
+def visualize_feature_importances(rf_model):
+    """
+    show feature importances for the random forst model
+    """
+    plt.figure(figsize=(12, 10))
+    plt.xticks(fontsize=26)
+    plt.yticks(fontsize=26)
+    plt.ylabel('Normalized Variance Reduction', fontsize=30)
+    plt.xlabel('Radial Index', fontsize=30)
+    plt.title('Feature Importances', fontsize=30)
+    plt.plot(np.arange(0, 546, 1),
+             rf_model.feature_importances_, linewidth=3, color='#ff7f0e')
+    loc = 0
+    for i in range(0, 21):
+        plt.vlines(loc, 0, max(rf_model.feature_importances_), color='k', linestyle='--')
+        loc += 26
+    plt.show()
+
+
+def lattice_prepare_training_and_test(df, df_type='radial', test_fraction=0.25, column_to_use='200_ang',
+                                      split_by_material=True,
+                                      use_scaled_cols=False, return_ids=False):
+    """
+    split diffraction data into train/test sets for lattice constant model training
+    """
+    if df_type == 'radial':
+        col_name = 'radial_' + column_to_use + '_Colin_basis'
+    if df_type == 'zernike':
+        col_name = 'zernike_' + column_to_use
+
+    input_col = np.asarray(df[col_name])
+    if return_ids == False:
+        labels = df[['a', 'b', 'c', 'alpha', 'beta', 'gamma']]
+    else:
+        labels = None
+
+    if split_by_material:
+        mat_ids = df['mat_id'].unique()
+        dummy_output = np.ones((len(mat_ids)))
+        mat_ids_train, mat_ids_test, dummy_train, dummy_test = train_test_split(mat_ids, dummy_output,
+                                                                                test_size=test_fraction,
+                                                                                random_state=32)
+        print(len(mat_ids_train))
+        print(len(mat_ids_test))
+
+        if return_ids:
+            return [mat_ids_train, mat_ids_test]
+
+        input_train_first = df.loc[df['mat_id'].isin(mat_ids_train)][col_name]
+        input_test_first = df.loc[df['mat_id'].isin(mat_ids_test)][col_name]
+        if use_scaled_cols:
+            print('using scaled cols')
+            labels_train = df.loc[df['mat_id'].isin(mat_ids_train)][
+                ['a_sorted', 'b_sorted', 'c_sorted', 'alpha', 'beta', 'gamma']]
+            labels_test = df.loc[df['mat_id'].isin(mat_ids_test)][
+                ['a_sorted', 'b_sorted', 'c_sorted', 'alpha', 'beta', 'gamma']]
+
+        else:
+            print('using unscaled cols')
+            labels_train = df.loc[df['mat_id'].isin(mat_ids_train)][['a', 'b', 'c', 'alpha', 'beta', 'gamma']]
+            labels_test = df.loc[df['mat_id'].isin(mat_ids_test)][['a', 'b', 'c', 'alpha', 'beta', 'gamma']]
+
+    else:
+        input_train_first, input_test_first, labels_train, labels_test = train_test_split(input_col, labels,
+                                                                                          test_size=test_fraction,
+                                                                                          random_state=32)
+    if len(input_train_first[0].shape) < 2:
+        input_train_temp = input_train_first
+        input_test_temp = input_test_first
+
+    else:
+        input_train_temp = []
+        for unit in input_train_first:
+            input_train_temp.append(flatten(unit))
+
+        input_test_temp = []
+        for unit in input_test_first:
+            input_test_temp.append(flatten(unit))
+
+    input_train = []
+    for row in input_train_temp:
+        temp = []
+        abs_i = np.abs(row)
+        angle_i = np.angle(row)
+        for i in range(0, len(abs_i)):
+            temp.append(abs_i[i])
+            temp.append(angle_i[i])
+            # print(temp)
+        input_train.append(temp)
+
+    input_test = []
+    for row in input_test_temp:
+        temp = []
+        abs_i = np.abs(row)
+        angle_i = np.angle(row)
+        for i in range(0, len(abs_i)):
+            temp.append(abs_i[i])
+            temp.append(angle_i[i])
+        input_test.append(temp)
+
+    return [input_train, input_test, labels_train, labels_test]
+
+
+def lattice_rf_diffraction(labels_train, labels_test, input_train, input_test, num_trees=80, max_depth=30,
+                           max_features='sqrt'):
+    """
+    train random forest regression models to predict lattice constants from an unlabeled electron diffraction pattern
+    """
+
+    rf_model = RandomForestRegressor(n_estimators=num_trees, n_jobs=-1,
+                                     max_features=max_features, random_state=32, verbose=2, max_depth=max_depth)
+    rf_model.fit(np.asarray(input_train), np.asarray(labels_train))
+    accuracy = rf_model.score(np.asarray(input_test), np.asarray(labels_test))
+    print('accuracy = ' + str(accuracy))
+    predictions = rf_model.predict(input_test)
+
+    predictions_full = []
+    trees = rf_model.estimators_
+    for tree in trees:
+        predictions_full.append(tree.predict(np.asarray(input_test)))
+        # print(tree.predict(np.asarray(updated_spectra_test)))
+    predictions_ordered = np.asarray(predictions_full).T
+    # plt.plot(np.arange(0,max(errors),0.1), np.arange(0,max(errors),0.1), color = 'k', linewidth = 3, linestyle = '--')
+
+    return [predictions_ordered, predictions, rf_model]
+
+
+def lattice_visualize_predictions(predictions_ordered, predictions, rf_model, labels_test, inputs_test, test_indicies):
+    """
+    visualize the accuracy of the lattice parameter models
+    """
+    count = 0
+    predictions_full = []
+    trees = rf_model.estimators_
+    # print(len(trees))
+    # for tree in trees:
+    # predictions_full.append(tree.predict(np.asarray(inputs_test)))
+    # predictions_ordered = np.asarray(predictions_full).T
+    uncertianties = []
+    for param in ['x', 'y', 'z', 'alpha', 'beta', 'gamma']:
+
+        # print(predictions_ordered[0])
+
+        # print(predictions_std)
+        plt.figure(figsize=(8, 7))
+        x_labels = labels_test[param].to_numpy()
+        x_predictions = predictions.T[count]
+        # print(x_labels)
+        # print(x_predictions)
+        errors = np.abs(x_labels - x_predictions)
+        errors = np.asarray(errors)
+        predictions_std = []
+        for prediction in predictions_ordered[count]:
+            predictions_std.append(np.std(prediction))
+        uncertianties.append(predictions_std)
+        # print(len(errors))
+        # print(len(predictions_std))
+        # print(errors)
+        # print(predictions_std)
+        plt.scatter(errors, predictions_std)
+        plt.title('Errors vs Prediction Std', fontsize=18)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+        plt.xlabel('Error in ' + param + ' Prediction', fontsize=16)
+        plt.ylabel('Prediction Std', fontsize=16)
+        plt.show()
+
+        MSE = np.square(errors).mean()
+        RMSE = math.sqrt(MSE)
+        print('RMSE ' + str(RMSE))
+
+        plt.figure(figsize=(8, 7))
+        plt.title('Error Histogram', fontsize=18)
+        hist = plt.hist(errors, bins=50)
+        plt.vlines(RMSE, max(hist[0]), min(hist[0]), color='limegreen', linewidth=5, label='RMSE')
+        plt.text(RMSE + 0.25, max(hist[0]) - 0.1 * max(hist[0]), 'RMSE = ' + str(round(RMSE, 3)),
+                 horizontalalignment='center', fontsize=16)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+        plt.xlabel('Error', fontsize=16)
+        plt.ylabel('Frequency', fontsize=16)
+        plt.show()
+
+        plt.figure(figsize=(8, 7))
+        print('R2 Score ' + str(r2_score(x_labels, x_predictions)))
+        plt.scatter(x_predictions, x_labels, c=predictions_std, s=50)
+        # plt.xlim([1.9, 3.1])
+        # plt.ylim([1.9, 3.1])
+        cb = plt.colorbar(label='Prediction Std')
+        ax = cb.ax
+        text = ax.yaxis.label
+        font = matplotlib.font_manager.FontProperties(size=22)
+        text.set_font_properties(font)
+        for t in cb.ax.get_yticklabels():
+            t.set_fontsize(22)
+        min_plot = round(min(x_labels) - 0.5, 0)
+        max_plot = round(max(x_labels) + 1.5, 0)
+        plt.plot(np.arange(min_plot, max_plot, 1), np.arange(min_plot, max_plot, 1), color='k', linewidth=3,
+                 linestyle='--')
+        plt.title('Predicted vs True ' + param, fontsize=24)
+        plt.xticks(fontsize=18)
+        plt.yticks(fontsize=18)
+        plt.xlabel(param + ' Prediction', fontsize=22)
+        plt.ylabel('True ' + param, fontsize=22)
+        plt.show()
+        count += 1
+
+    output_list = []
+    for i in range(0, len(labels_test)):
+        output_list.append([predictions[i], predictions[i][0], predictions[i][1], predictions[i][2],
+                            predictions[i][3], predictions[i][4], predictions[i][5],
+                            np.asarray(labels_test)[i], np.asarray(labels_test)[i][0], np.asarray(labels_test)[i][1],
+                            np.asarray(labels_test)[i][2], np.asarray(labels_test)[i][3], np.asarray(labels_test)[i][4],
+                            np.asarray(labels_test)[i][5], predictions_ordered[0][i], predictions_ordered[1][i],
+                            predictions_ordered[2][i], predictions_ordered[3][i], predictions_ordered[4][i],
+                            predictions_ordered[5][i],
+                            test_indicies[i], uncertianties[0][i], uncertianties[1][i], uncertianties[2][i],
+                            uncertianties[3][i],
+                            uncertianties[4][i], uncertianties[5][i]])
+
+    output_df = pd.DataFrame(np.asarray(output_list),
+                             columns=['All Predictions', 'Predictions x', 'Predictions y', 'Predictions z',
+                                      'Predictions alpha', 'Predictions beta', 'Predictions gamma', 'Full Labels Test',
+                                      'True x', 'True y', 'True z', 'True alpha', 'True beta', 'True gamma',
+                                      'Full Predictions x', 'Full Predictions y', 'Full Predictions z',
+                                      'Full Predictions alpha', 'Full Predictions beta', 'Full Predictions gamma',
+                                      'Full DF Index', 'std x', 'std y', 'std z', 'std alpha', 'std beta', 'std gamma']
+
+                             )
+
+    return output_df
+
+
+def update_df_lattice(df, API_key):
+    """
+    update the dataframe with extracted lattice parameters from the materials project
+    """
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from mp_api.client import MPRester
+
+    mat_ids = list(df['mat_id'].unique())
+    # mat_ids = mat_ids[0:1000]
+    # structures = mpr.get_structure_by_material_id(list(mat_ids))
+    mpr = MPRester(API_key)
+
+    a = []
+    b = []
+    c = []
+    alpha = []
+    beta = []
+    gamma = []
+    volumnes = []
+    ids = []
+    count = 0
+    for i in range(0, len(df)):
+        # try:
+        mat_id = df.iloc[i]['mat_id']
+        # print(mat_id)
+        # if mat_id == 'mp-510271':
+        #     print(mat_id)
+        # else:
+        if i != 0:
+            prev_mat_id = df.iloc[i - 1]['mat_id']
+        if i == 0:
+            prev_mat_id = None
+
+        if mat_id == prev_mat_id:
+
+            a.append(round(conventional_structure.lattice.a, 2))
+            b.append(round(conventional_structure.lattice.b, 2))
+            c.append(round(conventional_structure.lattice.c, 2))
+
+            alpha.append(round(conventional_structure.lattice.alpha, 2))
+            beta.append(round(conventional_structure.lattice.beta, 2))
+            gamma.append(round(conventional_structure.lattice.gamma, 2))
+            # volumnes.append(round(conventional_structure.lattice.a*conventional_structure.lattice.b*conventional_structure.lattice.c, 2))
+
+            ids.append(mat_id)
+
+        else:
+            if count in np.arange(0, 10000, 500):
+                print(count)
+            structure = df.iloc[i]['structure']
+
+            sga = SpacegroupAnalyzer(structure)
+            conventional_structure = sga.get_conventional_standard_structure()
+            # print(i, count)
+
+            a.append(round(conventional_structure.lattice.a, 2))
+            b.append(round(conventional_structure.lattice.b, 2))
+            c.append(round(conventional_structure.lattice.c, 2))
+
+            alpha.append(round(conventional_structure.lattice.alpha, 2))
+            beta.append(round(conventional_structure.lattice.beta, 2))
+            gamma.append(round(conventional_structure.lattice.gamma, 2))
+            # volumnes.append(round(conventional_structure.lattice.a*conventional_structure.lattice.b*conventional_structure.lattice.c, 2))
+
+            ids.append(mat_id)
+            # print(x[i],y[i],z[i],alpha[i],beta[i],gamma[i],mat_id)
+            count += 1
+            # except:
+            # print(mat_id)
+            # return [x,y,z,alpha,beta,gamma]
+        # print(round(conventional_structure.lattice.a, 2),
+        #      round(conventional_structure.lattice.b, 2),
+        #     round(conventional_structure.lattice.c, 2),
+        #    round(conventional_structure.lattice.alpha, 2),
+        #   round(conventional_structure.lattice.beta, 2),
+        #  round(conventional_structure.lattice.gamma, 2),
+        # round(conventional_structure.lattice.a*conventional_structure.lattice.b*conventional_structure.lattice.c, 2),
+        # mat_id)
+
+    df['a'] = a
+    df['b'] = b
+    df['c'] = c
+
+    df['alpha'] = alpha
+    df['beta'] = beta
+    df['gamma'] = gamma
+
+    df['ids'] = ids
+    # return None
+    return df
+
+
+def lattice_visualize_predictions_by_material(subdf, show_plots=True, include_legend=[False]):
+    """
+    visualize lattice constant predictions on a specific material
+    """
+    # print(test_indicies)
+    material_id = subdf.iloc[0].mat_id
+    true_crystal_sys = subdf.iloc[0]['crystal system']
+    output_list = []
+    temp_list = []
+
+    param_list = ['a_pred', 'b_pred', 'c_pred', 'alpha_pred', 'beta_pred', 'gamma_pred']
+    count = 0
+    for param in param_list:
+        # print(param)
+        # print(predictions_ordered[0])
+
+        # print(predictions_std)
+        if param == 'a_pred':
+            x_labels = subdf['x'].to_numpy()
+        elif param == 'b_pred':
+            x_labels = subdf['y'].to_numpy()
+        elif param == 'c_pred':
+            x_labels = subdf['z'].to_numpy()
+        else:
+            x_labels = subdf[param[0:len(param) - 5]].to_numpy()
+
+        x_predictions = subdf[param].to_numpy()
+        # print(x_labels)
+        # print(x_predictions)
+
+        # print(len(errors))
+        # print(len(predictions_std))
+        # print(errors)
+        # print(predictions_std)
+        if show_plots:
+            errors = np.abs(x_labels - x_predictions)
+            errors = np.asarray(errors)
+
+            MSE = np.square(errors).mean()
+            RMSE = math.sqrt(MSE)
+            print('RMSE ' + str(RMSE))
+
+            plt.figure(figsize=(8, 7))
+            plt.title('Error Histogram', fontsize=18)
+            hist = plt.hist(errors, bins=50)
+            plt.vlines(RMSE, max(hist[0]), min(hist[0]), color='limegreen', linewidth=5, label='RMSE')
+            plt.text(RMSE + 0.25, max(hist[0]) - 0.1 * max(hist[0]), 'RMSE = ' + str(round(RMSE, 3)),
+                     horizontalalignment='center', fontsize=16)
+            plt.xticks(fontsize=16)
+            plt.yticks(fontsize=16)
+            plt.xlabel('Error', fontsize=16)
+            plt.ylabel('Frequency', fontsize=16)
+            plt.show()
+
+            plt.figure(figsize=(8, 7))
+            hist_pred = plt.hist(x_predictions, bins=12)
+            if param == 'x':
+                plt.title('Prediction Histogram a', fontsize=24)
+            elif param == 'y':
+                plt.title('Prediction Histogram b', fontsize=24)
+            elif param == 'z':
+                plt.title('Prediction Histogram c', fontsize=24)
+            else:
+                plt.title('Prediction Histogram ' + param, fontsize=24)
+
+            plt.xticks(fontsize=20)
+            plt.yticks(fontsize=20)
+            plt.ylabel('Num Patterns', fontsize=22)
+            if param == 'x':
+                plt.vlines(x_labels[0], max(hist_pred[0]), min(hist_pred[0]), label='True a', color='r', linewidth=3)
+                plt.xlabel('Predicted a', fontsize=22)
+
+            elif param == 'y':
+                plt.vlines(x_labels[0], max(hist_pred[0]), min(hist_pred[0]), label='True b', color='r', linewidth=3)
+                plt.xlabel('Predicted b', fontsize=22)
+
+            elif param == 'z':
+                plt.vlines(x_labels[0], max(hist_pred[0]), min(hist_pred[0]), label='True c', color='r', linewidth=3)
+                plt.xlabel('Predicted c', fontsize=22)
+
+            else:
+                plt.vlines(x_labels[0], max(hist_pred[0]), min(hist_pred[0]), label='True ' + param, color='r',
+                           linewidth=3)
+                plt.xlabel('Predicted ' + param, fontsize=22)
+
+            bins_list = list(hist_pred[1])
+            n_list = list(hist_pred[0])
+            mode_index = n_list.index(max(n_list))
+            print(bins_list)
+            mode = (bins_list[mode_index] + bins_list[mode_index + 1]) / 2
+            plt.vlines(mode, max(hist_pred[0]), min(hist_pred[0]), label='Aggregate Prediction', color='limegreen',
+                       linewidth=3)
+            if include_legend[count]:
+                plt.legend(fontsize=20)
+            count += 1
+            plt.show()
+
+        else:
+            hist_pred = np.histogram(x_predictions, bins=12)
+            bins_list = list(hist_pred[1])
+            n_list = list(hist_pred[0])
+            mode_index = n_list.index(max(n_list))
+            # print(bins_list)
+            mode = (bins_list[mode_index] + bins_list[mode_index + 1]) / 2
+        temp_list.append(x_predictions)
+        temp_list.append(mode)
+        temp_list.append(x_labels[0])
+    temp_list.append(material_id)
+    temp_list.append(true_crystal_sys)
+    output_list.append(temp_list)
+    # print(len(np.asarray(output_list, dtype = 'object')))
+    output_df = pd.DataFrame(np.asarray(output_list, dtype='object'),
+                             columns=['a_full_predictions', 'a_mode', 'a_true',
+                                      'b_full_predictions', 'b_mode', 'b_true',
+                                      'c_full_predictions', 'c_mode', 'c_true',
+                                      'alpha_full_predictions', 'alpha_mode', 'alpha_true',
+                                      'beta_full_predictions', 'beta_mode', 'beta_true',
+                                      'gamma_full_predictions', 'gamma_mode', 'gamma_true',
+                                      'material_id', 'true_crystal_sys'])
+    return output_df
+
+
 def r2(true, pred):
-    print('starting r2')
+    """
+    calculate R^2 value
+    """
     errors = []
     squares_true = []
     mean_true = np.mean(true)
@@ -195,6 +833,11 @@ def plot_hist_2D(
             return im_rgb
     
 def map_to_int(array_of_crystal_sys):
+
+    """
+    cast each crystal system to an integer
+    """
+
     new_list = []
     for i in array_of_crystal_sys:
         if i == 'cubic':
@@ -218,6 +861,9 @@ def flatten(list1):
     return [item for sublist in list1 for item in sublist]
 
 def build_full_predictions(rf_model, input_test):
+    """
+    extract predictions from each decision tree of the random forest model
+    """
     # max_depth=6
     
     # predictions = rf_model.predict(input_test)
@@ -242,8 +888,11 @@ def build_full_predictions(rf_model, input_test):
     
     # return rf_model
     
-def rf_diffraction(labels_train, labels_test, input_train, input_test, show_cm = True, show_uncertianty = True, num_trees = 500, max_depth = 40,
-              index_to_use = 0, max_features = 'sqrt'):
+def rf_diffraction(labels_train, labels_test, input_train, input_test, show_cm = True, show_uncertianty = True,
+                   num_trees = 500, max_depth = 40, index_to_use = 0, max_features = 'sqrt'):
+    """
+    train random forest classifier model to predict crystal system from an unlabeled electron diffraction pattern
+    """
     # max_depth=6
     rf_model = RandomForestClassifier(n_estimators=num_trees, n_jobs=-1, max_features=max_features, random_state=32, verbose = 2, max_depth = max_depth)
     rf_model.fit(np.asarray(input_train), np.asarray(labels_train))
@@ -272,6 +921,9 @@ def rf_diffraction(labels_train, labels_test, input_train, input_test, show_cm =
     
     # return rf_model
 def crystal_sys_from_space_group(space_groups):
+    """
+    map space group to its parent crystal system
+    """
     crystal_sys = []
     for sg in space_groups:
         # print(sg)
@@ -291,11 +943,16 @@ def crystal_sys_from_space_group(space_groups):
             crystal_sys.append('cubic')   
     return crystal_sys
 
-def update_df(df):
+def update_df(df, API_key):
+    """
+    update dataframe with crystal structure information
+    """
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from mp_api.client import MPRester
     mat_ids = list(df['mat_id'].unique())
     # mat_ids = mat_ids[0:1000]
     # structures = mpr.get_structure_by_material_id(list(mat_ids))
-    with MPRester("CEvsr9tiYxi6MaxfRnSU7V9FCaIAcAZh") as mpr:
+    with MPRester(API_key) as mpr:
         # doc = mpr.materials.search(task_ids = mat_ids[chunk:top], fields=['material_id', 'formula_pretty', 'structure', 'composition'])
 
         structures = []
@@ -335,6 +992,9 @@ def update_df(df):
     return df
 
 def build_dictionary_point_group_mapping(df):
+    """
+    builds a dictionary of space group to point group relationships
+    """
     point_group_dict = {}
     mat_ids = list(df['mat_id'].unique())
     for mat_id in mat_ids:
@@ -355,6 +1015,9 @@ def build_dictionary_point_group_mapping(df):
     return point_group_dict
 
 def point_group_from_space_group(space_groups, point_group_dict):
+    """
+    map space group to its parent point group
+    """
     point_group = []
     for sg in space_groups:
          point_group.append(point_group_dict[sg]) 
@@ -388,6 +1051,10 @@ def crystal_system_from_space_group_full_predictions(predictions_space_group):
 def show_cm_and_uncertianty(predictions_ordered, predictions, rf_model, full_df, labels_test, test_indicies, 
                             show_cm = False, show_uncertianty = False, type_to_show = 'crystal system', point_group_df = None,
                            predicted_quant = 'space_group', savefigure = False, generate_df_with_predictions = False):
+
+    """
+    function to view confusion matrices and generate dataframe containing predictions and labels for the test set
+    """
     
     if predicted_quant == 'crystal system': 
         
@@ -819,6 +1486,9 @@ def show_cm_and_uncertianty(predictions_ordered, predictions, rf_model, full_df,
         return output_df
     
 def visualize_predictions(index_to_use, output_df, full_df, vis_type = 'crystal system'):
+    """
+    deprecated - visualize the prediction of a specific diffraction pattern
+    """
         # temp = []
         # for pred in predictions_ordered[index_to_use]:
             # temp.append(rf_model.classes_[int(pred)])
@@ -871,166 +1541,6 @@ def visualize_predictions(index_to_use, output_df, full_df, vis_type = 'crystal 
         # plt.vlines(predictions[0], 0, height, color='red', label='Predicted Space Group',linewidth=5,linestyle=':')
         plt.legend(fontsize=16)
         plt.show()
-
-        
-        """
-        pg_df = pd.DataFrame(predictions_point_group, columns = ['Predictions'])
-        print(pg_df)
-        val_counts = pg_df['Predictions'].value_counts()
-        xs = list(val_counts.index)
-        ys = np.asarray(val_counts)
-        ys_percentage = 100*ys*(1/len(pg_df))
-
-        plt.figure(figsize=(10, 8))
-        plt.title('Prediction Histogram ' + sample_mat_id + ' ' + str(sample_zone), fontsize=24)
-        plt.xticks(fontsize=20)
-        plt.yticks(fontsize=20)
-        plt.xlabel('Prediction', fontsize=24)
-        plt.ylabel('Percentage', fontsize=24)
-        plt.bar(xs, ys_percentage, edgecolor='k', facecolor='grey', fill=True, linewidth=3)
-        plt.xticks(rotation = 270)
-        height = max(ys_percentage)
-        height_index = list(ys_percentage).index(height)
-
-        plt.bar(xs[height_index], ys_percentage[height_index], edgecolor = 'r', facecolor='r', 
-                fill=False, hatch='/', label = 'Prediction')
-        true_ind = xs.index(true_val_point_group)
-        plt.bar(xs[true_ind], ys_percentage[true_ind], edgecolor = 'b', facecolor='b', 
-                fill=False, hatch='..', label = 'True')
-        # plt.vlines(labels_test[0], 0, height, color='blue', label='True Space Group', linewidth=5)
-        # plt.vlines(predictions[0], 0, height, color='red', label='Predicted Space Group',linewidth=5,linestyle=':')
-        plt.legend(fontsize=16)
-        plt.show()
-        """
-        
-        """
-        if sg in [1,2]:
-            crystal_sys.append('triclinic')
-        if sg >= 3 and sg <= 15:
-            crystal_sys.append('monoclinic')
-        if sg >= 16 and sg <= 74:
-            crystal_sys.append('orthorhombic')
-        if sg >= 75 and sg <= 142:
-            crystal_sys.append('tetragonal')
-        if sg >= 143 and sg <= 167:
-            crystal_sys.append('trigonal')
-        if sg >= 168 and sg <= 194:
-            crystal_sys.append('hexagonal')          
-        if sg >= 195 and sg <= 230:
-            crystal_sys.append('cubic')   
-        """
-        
-        """
-        sg_df = pd.DataFrame(predictions_space_group, columns = ['Predictions'])
-        val_counts = sg_df['Predictions'].value_counts()
-        xs = list(val_counts.index)
-        ys = np.asarray(val_counts)
-        ys_percentage = 100*ys*(1/len(sg_df))
-
-        plt.figure(figsize=(12, 8))
-        plt.vlines(0, 0,ys_percentage[true_ind], color = 'r', linestyle = '--', label = 'triclinic')
-        plt.vlines(3, 0,ys_percentage[true_ind], color = 'r', linestyle = '--')
-        plt.hlines(ys_percentage[true_ind], 0,3, color = 'r', linestyle = '--')
-        
-        plt.vlines(3, 0,ys_percentage[true_ind], color = 'b', linestyle = '--', label = 'monoclinic')
-        plt.vlines(16, 0,ys_percentage[true_ind], color = 'b', linestyle = '--')
-        plt.hlines(ys_percentage[true_ind], 3,16, color = 'b', linestyle = '--')
-
-        plt.vlines(75, 0,ys_percentage[true_ind], color = 'green', linestyle = '--', label = 'orthorhombic')
-        plt.vlines(16, 0,ys_percentage[true_ind], color = 'green', linestyle = '--')
-        plt.hlines(ys_percentage[true_ind], 75,16, color = 'green', linestyle = '--')
-        
-        plt.vlines(143, 0,ys_percentage[true_ind], color = 'purple', linestyle = '--', label = 'tetragonal')
-        plt.vlines(75, 0,ys_percentage[true_ind], color = 'purple', linestyle = '--')
-        plt.hlines(ys_percentage[true_ind], 143,75, color = 'purple', linestyle = '--')
-        
-        plt.vlines(143, 0,ys_percentage[true_ind], color = 'k', linestyle = '--', label = 'trigonal')
-        plt.vlines(168, 0,ys_percentage[true_ind], color = 'k', linestyle = '--')
-        plt.hlines(ys_percentage[true_ind], 143,168, color = 'k', linestyle = '--')
-        
-        plt.vlines(168, 0,ys_percentage[true_ind], color = 'darkorange', linestyle = '--', label = 'hexagonal')
-        plt.vlines(195, 0,ys_percentage[true_ind], color = 'darkorange', linestyle = '--')
-        plt.hlines(ys_percentage[true_ind], 168,195, color = 'darkorange', linestyle = '--')
-        
-        plt.vlines(231, 0,ys_percentage[true_ind], color = 'darkcyan', linestyle = '--', label = 'cubic')
-        plt.vlines(195, 0,ys_percentage[true_ind], color = 'darkcyan', linestyle = '--')
-        plt.hlines(ys_percentage[true_ind], 231,195, color = 'darkcyan', linestyle = '--')
-        plt.legend(fontsize=14, loc='upper right')
-        plt.xlim([-5,300])
-        plt.ylim([0, 13])
-
-        plt.title('Prediction Histogram ' + sample_mat_id + ' ' + str(sample_zone), fontsize=24)
-        plt.xticks(fontsize=20)
-        plt.yticks(fontsize=20)
-        plt.xlabel('Prediction', fontsize=24)
-        plt.ylabel('Percentage', fontsize=24)
-        plt.bar(xs, ys_percentage, edgecolor='k', facecolor='grey', fill=True, linewidth=3)
-        print(xs)
-        print(ys_percentage)
-        crystal_systems = crystal_sys_from_space_group(xs)
-        cs_mapping = []
-        for i in range(0, len(xs)):
-            cs_mapping.append([xs[i], ys_percentage[i], crystal_systems[i]])
-        cs_mapping_df = pd.DataFrame(cs_mapping, columns = ['Space Groups', 'Percentages', 'Crystal Systems'])
-        
-        triclinic = sum(cs_mapping_df.loc[cs_mapping_df['Crystal Systems'] == 'triclinic']['Percentages'])
-        monoclinic = sum(cs_mapping_df.loc[cs_mapping_df['Crystal Systems'] == 'monoclinic']['Percentages'])
-        orthorhombic = sum(cs_mapping_df.loc[cs_mapping_df['Crystal Systems'] == 'orthorhombic']['Percentages'])
-        tetragonal = sum(cs_mapping_df.loc[cs_mapping_df['Crystal Systems'] == 'tetragonal']['Percentages'])
-        trigonal = sum(cs_mapping_df.loc[cs_mapping_df['Crystal Systems'] == 'trigonal']['Percentages'])
-        hexagonal = sum(cs_mapping_df.loc[cs_mapping_df['Crystal Systems'] == 'hexagonal']['Percentages'])
-        cubic = sum(cs_mapping_df.loc[cs_mapping_df['Crystal Systems'] == 'cubic']['Percentages'])
-        
-        
-        sum(cs_mapping_df.loc[cs_mapping_df['Crystal Systems'] == 'orthorhombic']['Percentages'])
-        # plt.xticks(rotation = 270)
-        height = max(ys_percentage)
-        height_index = list(ys_percentage).index(height)
-
-        plt.bar(xs[height_index], ys_percentage[height_index], edgecolor = 'r', facecolor='r', 
-                fill=False, hatch='/', label = 'Prediction')
-        true_ind = xs.index(true_val_space_group)
-        plt.bar(xs[true_ind], ys_percentage[true_ind], edgecolor = 'b', facecolor='b', 
-                fill=False, hatch='..', label = 'True')
-        # plt.vlines(labels_test[0], 0, height, color='blue', label='True Space Group', linewidth=5)
-        # plt.vlines(predictions[0], 0, height, color='red', label='Predicted Space Group',linewidth=5,linestyle=':')
-        # plt.legend(fontsize=16)
-        plt.show()
-
-        return cs_mapping_df
-        # cry_sys_input = input()
-        """
-        """
-        subdf_cry_sys = crys_sys_df.loc[crys_sys_df['Predictions'] == cry_sys_input]
-        indicies_to_use = subdf_cry_sys.index
-        subdf_sg = sg_df.iloc[indicies_to_use]
-
-        val_counts = subdf_sg['Predictions'].value_counts()
-        xs = list(val_counts.index)
-        ys = np.asarray(val_counts)
-        ys_percentage = 100*ys*(1/len(subdf_sg))
-
-        plt.figure(figsize=(10, 8))
-        plt.title('Prediction Histogram ' + sample_mat_id + ' ' + str(sample_zone), fontsize=24)
-        plt.xticks(fontsize=20)
-        plt.yticks(fontsize=20)
-        plt.xlabel('Prediction', fontsize=24)
-        plt.ylabel('Percentage', fontsize=24)
-        plt.bar(xs, ys_percentage, edgecolor='k', facecolor='grey', fill=True, linewidth=3)
-        # plt.xticks(rotation = 270)
-        height = max(ys_percentage)
-        height_index = list(ys_percentage).index(height)
-
-        plt.bar(xs[height_index], ys_percentage[height_index], edgecolor = 'r', facecolor='r', 
-                fill=False, hatch='/', label = 'Prediction')
-        true_ind = xs.index(true_val_space_group)
-        plt.bar(xs[true_ind], ys_percentage[true_ind], edgecolor = 'b', facecolor='b', 
-                fill=False, hatch='..', label = 'True')
-        # plt.vlines(labels_test[0], 0, height, color='blue', label='True Space Group', linewidth=5)
-        # plt.vlines(predictions[0], 0, height, color='red', label='Predicted Space Group',linewidth=5,linestyle=':')
-        plt.legend(fontsize=16)
-        plt.show()
-        """
         
     if vis_type == 'thickness':
         row = output_df.iloc[index_to_use]   
@@ -1069,9 +1579,13 @@ def visualize_predictions(index_to_use, output_df, full_df, vis_type = 'crystal 
         plt.legend(fontsize=16)
         plt.show()
         
-def visualize_predictions_by_material(output_df, sample_mat_id = 'mp-1005760', random_inds = None, show_all_materials = True, show_individual = False,
+def visualize_predictions_by_material(output_df, sample_mat_id = 'mp-1005760', random_inds = None,
+                                      show_all_materials = True, show_individual = False,
                                      show_triclinic = False, savefigure = True, filenames=None):
-    
+
+    """
+    deprecated function to view confusion matrices
+    """
     if show_triclinic:
         crystal_sys_alph = ['Cubic', 'Hexagonal', 'Monoclinic', 'Orthorhombic', 'Tetragonal', 'Triclinic', 'Trigonal']
     else:
@@ -1079,7 +1593,7 @@ def visualize_predictions_by_material(output_df, sample_mat_id = 'mp-1005760', r
 
     
     if show_individual:
-        subdf = output_df_radial.loc[output_df_radial['mat_id'] == sample_mat_id]
+        subdf = output_df.loc[output_df['mat_id'] == sample_mat_id]
 
         if random_inds == None:
             random_inds = len(subdf)
@@ -1323,587 +1837,4 @@ def visualize_predictions_by_material(output_df, sample_mat_id = 'mp-1005760', r
         
     return None
 
-def map_predictions(prediction, rf_model = None, list_of_classes = None):
-    list_of_classes_uncapped = []
-    for c in list_of_classes:
-        c_lower = c.lower()
-        list_of_classes_uncapped.append(c_lower)
-    #print(prediction)
-    if rf_model != None: 
-        classes = list(rf_model.classes_)
-        index = classes.index(prediction)
-        return index
-    if list_of_classes_uncapped != None:
-        index = list_of_classes_uncapped.index(prediction)
-        return index
-    
-
-def prepare_training_and_test(df, df_type = 'radial', test_fraction = 0.25, column_to_use = '20_ang', 
-                              quantity = 'space_group_symbol', split_by_material = True):
-    if df_type == 'radial':
-        col_name = 'radial_' + column_to_use + '_Colin_basis'
-        # col_name = 'radial_' + column_to_use
-
-    if df_type == 'zernike':
-        col_name = 'zernike_' + column_to_use     
-    
-    input_col = np.asarray(df[col_name])
-    labels = df[quantity]
-    
-    if split_by_material: 
-        mat_ids = df['mat_id'].unique()
-        dummy_output = np.ones((len(mat_ids)))
-        mat_ids_train, mat_ids_test, dummy_train, dummy_test = train_test_split(mat_ids, dummy_output,
-                                                                          test_size=test_fraction,
-                                                                          random_state=32)
-        print(len(mat_ids_train))
-        print(len(mat_ids_test))
-        
-        input_train_first = df.loc[df['mat_id'].isin(mat_ids_train)][col_name]
-        input_test_first = df.loc[df['mat_id'].isin(mat_ids_test)][col_name]
-        
-        labels_train = df.loc[df['mat_id'].isin(mat_ids_train)][quantity]
-        labels_test = df.loc[df['mat_id'].isin(mat_ids_test)][quantity]
-        
-    else:
-        input_train_first, input_test_first, labels_train, labels_test = train_test_split(input_col, labels,
-                                                                          test_size=test_fraction,
-                                                                          random_state=32)
-    if len(input_train_first[0].shape) < 2:
-        input_train_temp = input_train_first
-        input_test_temp = input_test_first
-    
-    else:
-        input_train_temp = []
-        count = 0
-        for unit in input_train_first:
-            if count in np.arange(0,3000000,10000):
-                print(count)
-            count += 1
-            input_train_temp.append(flatten(unit))
-
-        input_test_temp = []
-        count = 0
-        for unit in input_test_first:
-            if count in np.arange(0,3000000,10000):
-                print(count)
-            count += 1
-            input_test_temp.append(flatten(unit))
-    
-    input_test_first = None
-    input_train_first = None
-    
-    input_train = []
-    count = 0
-    for row in input_train_temp:
-        if count in np.arange(0,3000000,10000):
-            print(count)
-        count += 1
-        temp = []
-        abs_i = np.abs(row)
-        angle_i = np.angle(row)
-        for i in range(0, len(abs_i)):
-            temp.append(abs_i[i])
-            temp.append(angle_i[i])
-            # print(temp)
-        input_train.append(np.asarray(temp))
-    
-    input_train = np.asarray(input_train)
-
-    count = 0
-    input_test = []
-    for row in input_test_temp:
-        if count in np.arange(0,3000000,10000):
-            print(count)
-        count += 1
-        temp = []
-        abs_i = np.abs(row)
-        angle_i = np.angle(row)
-        for i in range(0, len(abs_i)):
-            temp.append(abs_i[i])
-            temp.append(angle_i[i])
-        input_test.append(np.asarray(temp)) 
-    
-    input_test = np.asarray(input_test)
-    
-    return [input_train, input_test, labels_train, labels_test]
-
-def scale_df_lattice(df, ids_column):
-    a_s = []
-    b_s = []
-    c_s = []
-    count = -1
-    for mat_id in df[ids_column].unique():
-        count += 1 
-        # print(100*count/len(df.ids.unique()))
-        subdf = df.loc[df[ids_column] == mat_id]
-
-        a = np.asarray(subdf[['a', 'b', 'c']]).T[0][0]
-        b = np.asarray(subdf[['a', 'b', 'c']]).T[1][0]
-        c = np.asarray(subdf[['a', 'b', 'c']]).T[2][0]
-
-        lattice_params = [a, b, c]
-        lattice_params.sort()
-
-        reverse_indicies=[2,1,0]
-
-        for i in reverse_indicies:
-            if a == lattice_params[i]:
-                for a_entry in np.asarray(subdf[['a', 'b', 'c']]).T[0]:
-                    if i == 2:
-                        a_s.append(a_entry)
-                    if i == 1:
-                        b_s.append(a_entry)
-                    if i == 0:
-                        c_s.append(a_entry)
-
-            elif b == lattice_params[i]:
-                for b_entry in np.asarray(subdf[['a', 'b', 'c']]).T[1]:
-                    if i == 2:
-                        a_s.append(b_entry)
-                    if i == 1:
-                        b_s.append(b_entry)
-                    if i == 0:
-                        c_s.append(b_entry)    
-
-            elif c == lattice_params[i]:
-                for c_entry in np.asarray(subdf[['a', 'b', 'c']]).T[2]:
-                    if i == 2:
-                        a_s.append(c_entry)
-                    if i == 1:
-                        b_s.append(c_entry)
-                    if i == 0:
-                        c_s.append(c_entry)
-
-    df['c_sorted'] = a_s
-    df['b_sorted'] = b_s
-    df['a_sorted'] = c_s
-    
-    return df
-
-def remove_triclinic(inputs, labels):
-    df_inputs = pd.DataFrame(inputs)
-    df_inputs['crystal system'] = np.asarray(labels)
-    df_inputs['radial_dataframe_indicies'] = labels.index
-
-    triclinic_indicies = df_inputs.loc[df_inputs['crystal system'] == 'triclinic'].index
-    print(len(triclinic_indicies))
-    df_no_triclinic = df_inputs.drop(triclinic_indicies)
-    # df_no_triclinic.reset_index(inplace = True)
-    # df_no_triclinic.drop('index', axis = 1, inplace = True)
-    return df_no_triclinic
-
-def visualize_feature_importances(rf_model):
-    plt.figure(figsize = (12,10))
-    plt.xticks(fontsize = 26)
-    plt.yticks(fontsize = 26)
-    plt.ylabel('Normalized Variance Reduction', fontsize = 30)
-    plt.xlabel('Radial Index', fontsize = 30)
-    plt.title('Feature Importances', fontsize = 30)
-    plt.plot(np.arange(0, 546, 1), 
-             rf_model.feature_importances_, linewidth =3, color = '#ff7f0e')
-    loc = 0
-    for i in range(0, 21):
-        plt.vlines(loc, 0, max(rf_model.feature_importances_), color = 'k', linestyle = '--')
-        loc += 26
-    plt.show()
-    
-def lattice_prepare_training_and_test(df, df_type = 'radial', test_fraction = 0.25, column_to_use = '200_ang', split_by_material = True,
-                                     use_scaled_cols = False, return_ids = False):
-    
-    if df_type == 'radial':
-        col_name = 'radial_' + column_to_use + '_Colin_basis'
-    if df_type == 'zernike':
-        col_name = 'zernike_' + column_to_use     
-    
-    input_col = np.asarray(df[col_name])
-    if return_ids == False: 
-        labels = df[['a', 'b', 'c', 'alpha', 'beta', 'gamma']]
-    else:
-        labels = None
-    
-    if split_by_material: 
-        mat_ids = df['mat_id'].unique()
-        dummy_output = np.ones((len(mat_ids)))
-        mat_ids_train, mat_ids_test, dummy_train, dummy_test = train_test_split(mat_ids, dummy_output,
-                                                                          test_size=test_fraction,
-                                                                          random_state=32)
-        print(len(mat_ids_train))
-        print(len(mat_ids_test))
-        
-        if return_ids:
-            return [mat_ids_train, mat_ids_test]
-        
-        input_train_first = df.loc[df['mat_id'].isin(mat_ids_train)][col_name]
-        input_test_first = df.loc[df['mat_id'].isin(mat_ids_test)][col_name]
-        if use_scaled_cols:
-            print('using scaled cols')
-            labels_train = df.loc[df['mat_id'].isin(mat_ids_train)][['a_sorted', 'b_sorted', 'c_sorted', 'alpha', 'beta', 'gamma']]
-            labels_test = df.loc[df['mat_id'].isin(mat_ids_test)][['a_sorted', 'b_sorted', 'c_sorted', 'alpha', 'beta', 'gamma']]
-            
-        else:
-            print('using unscaled cols')
-            labels_train = df.loc[df['mat_id'].isin(mat_ids_train)][['a', 'b', 'c', 'alpha', 'beta', 'gamma']]
-            labels_test = df.loc[df['mat_id'].isin(mat_ids_test)][['a', 'b', 'c', 'alpha', 'beta', 'gamma']]
-        
-    else:
-        input_train_first, input_test_first, labels_train, labels_test = train_test_split(input_col, labels,
-                                                                          test_size=test_fraction,
-                                                                          random_state=32)
-    if len(input_train_first[0].shape) < 2:
-        input_train_temp = input_train_first
-        input_test_temp = input_test_first
-    
-    else:
-        input_train_temp = []
-        for unit in input_train_first:
-            input_train_temp.append(flatten(unit))
-
-        input_test_temp = []
-        for unit in input_test_first:
-            input_test_temp.append(flatten(unit))
-    
-    input_train = []
-    for row in input_train_temp:
-        temp = []
-        abs_i = np.abs(row)
-        angle_i = np.angle(row)
-        for i in range(0, len(abs_i)):
-            temp.append(abs_i[i])
-            temp.append(angle_i[i])
-            # print(temp)
-        input_train.append(temp)
-
-
-    input_test = []
-    for row in input_test_temp:
-        temp = []
-        abs_i = np.abs(row)
-        angle_i = np.angle(row)
-        for i in range(0, len(abs_i)):
-            temp.append(abs_i[i])
-            temp.append(angle_i[i])
-        input_test.append(temp) 
-        
-    
-    return [input_train, input_test, labels_train, labels_test]
-
-def lattice_rf_diffraction(labels_train, labels_test, input_train, input_test, num_trees = 80, max_depth = 30, max_features = 'sqrt'):
-    rf_model = RandomForestRegressor(n_estimators=num_trees, n_jobs=-1, 
-                                     max_features=max_features, random_state=32, verbose = 2, max_depth = max_depth)
-    rf_model.fit(np.asarray(input_train), np.asarray(labels_train))
-    accuracy = rf_model.score(np.asarray(input_test), np.asarray(labels_test))
-    print('accuracy = ' + str(accuracy))
-    predictions = rf_model.predict(input_test)
-    
-    predictions_full = []
-    trees = rf_model.estimators_
-    for tree in trees:
-        predictions_full.append(tree.predict(np.asarray(input_test)))
-        # print(tree.predict(np.asarray(updated_spectra_test)))
-    predictions_ordered = np.asarray(predictions_full).T
-        # plt.plot(np.arange(0,max(errors),0.1), np.arange(0,max(errors),0.1), color = 'k', linewidth = 3, linestyle = '--')
-        
-    return [predictions_ordered, predictions, rf_model]
-
-def lattice_visualize_predictions(predictions_ordered, predictions, rf_model, labels_test, inputs_test, test_indicies):
-    count = 0
-    predictions_full = []
-    trees = rf_model.estimators_
-    # print(len(trees))
-    # for tree in trees:
-        # predictions_full.append(tree.predict(np.asarray(inputs_test)))
-    # predictions_ordered = np.asarray(predictions_full).T
-    uncertianties = []
-    for param in ['x', 'y', 'z', 'alpha', 'beta', 'gamma']:
-            
-        # print(predictions_ordered[0])
-
-            # print(predictions_std)
-        plt.figure(figsize=(8, 7))
-        x_labels = labels_test[param].to_numpy()
-        x_predictions = predictions.T[count]
-        # print(x_labels)
-        # print(x_predictions)
-        errors = np.abs(x_labels - x_predictions)
-        errors = np.asarray(errors)
-        predictions_std = []
-        for prediction in predictions_ordered[count]:
-            predictions_std.append(np.std(prediction))
-        uncertianties.append(predictions_std)
-        # print(len(errors))
-        # print(len(predictions_std))
-        # print(errors)
-        # print(predictions_std)
-        plt.scatter(errors, predictions_std)
-        plt.title('Errors vs Prediction Std', fontsize=18)
-        plt.xticks(fontsize=16)
-        plt.yticks(fontsize=16)
-        plt.xlabel('Error in ' + param + ' Prediction', fontsize=16)
-        plt.ylabel('Prediction Std', fontsize=16)
-        plt.show()
-
-        MSE = np.square(errors).mean() 
-        RMSE = math.sqrt(MSE)
-        print('RMSE ' + str(RMSE))
-
-        plt.figure(figsize=(8, 7))
-        plt.title('Error Histogram', fontsize=18)
-        hist = plt.hist(errors, bins = 50)
-        plt.vlines(RMSE, max(hist[0]), min(hist[0]), color='limegreen', linewidth=5, label='RMSE')
-        plt.text(RMSE+0.25, max(hist[0])-0.1*max(hist[0]), 'RMSE = ' +str(round(RMSE, 3)), horizontalalignment='center', fontsize = 16)
-        plt.xticks(fontsize=16)
-        plt.yticks(fontsize=16)
-        plt.xlabel('Error', fontsize=16)
-        plt.ylabel('Frequency', fontsize=16)
-        plt.show()
-
-        plt.figure(figsize=(8, 7))
-        print('R2 Score ' + str(r2_score(x_labels, x_predictions)))
-        plt.scatter(x_predictions, x_labels, c=predictions_std, s=50)
-        # plt.xlim([1.9, 3.1])
-        # plt.ylim([1.9, 3.1])
-        cb = plt.colorbar(label='Prediction Std')
-        ax = cb.ax
-        text = ax.yaxis.label
-        font = matplotlib.font_manager.FontProperties(size=22)
-        text.set_font_properties(font)
-        for t in cb.ax.get_yticklabels():
-            t.set_fontsize(22)
-        min_plot = round(min(x_labels)-0.5, 0)
-        max_plot = round(max(x_labels)+1.5, 0)
-        plt.plot(np.arange(min_plot, max_plot, 1), np.arange(min_plot, max_plot, 1), color='k', linewidth=3, linestyle='--')
-        plt.title('Predicted vs True ' + param, fontsize=24)
-        plt.xticks(fontsize=18)
-        plt.yticks(fontsize=18)
-        plt.xlabel(param + ' Prediction', fontsize=22)
-        plt.ylabel('True ' + param, fontsize=22)
-        plt.show()
-        count += 1 
-        
-        
-    output_list = []
-    for i in range(0, len(labels_test)):
-        output_list.append([predictions[i], predictions[i][0], predictions[i][1], predictions[i][2],
-                            predictions[i][3], predictions[i][4], predictions[i][5],
-                            np.asarray(labels_test)[i], np.asarray(labels_test)[i][0], np.asarray(labels_test)[i][1],
-                            np.asarray(labels_test)[i][2], np.asarray(labels_test)[i][3], np.asarray(labels_test)[i][4],
-                             np.asarray(labels_test)[i][5], predictions_ordered[0][i], predictions_ordered[1][i], 
-                            predictions_ordered[2][i], predictions_ordered[3][i], predictions_ordered[4][i], predictions_ordered[5][i], 
-                             test_indicies[i], uncertianties[0][i], uncertianties[1][i], uncertianties[2][i], uncertianties[3][i],
-                            uncertianties[4][i], uncertianties[5][i]])
-
-
-    output_df = pd.DataFrame(np.asarray(output_list),
-                             columns = ['All Predictions', 'Predictions x', 'Predictions y', 'Predictions z',
-                                        'Predictions alpha', 'Predictions beta', 'Predictions gamma', 'Full Labels Test',
-                                        'True x', 'True y', 'True z', 'True alpha', 'True beta', 'True gamma', 
-                                        'Full Predictions x', 'Full Predictions y', 'Full Predictions z', 
-                                        'Full Predictions alpha', 'Full Predictions beta', 'Full Predictions gamma',
-                                        'Full DF Index', 'std x', 'std y', 'std z', 'std alpha', 'std beta', 'std gamma']
-
-                            )
-
-    return output_df
-
-def update_df_lattice(df):
-    mat_ids = list(df['mat_id'].unique())
-    # mat_ids = mat_ids[0:1000]
-    # structures = mpr.get_structure_by_material_id(list(mat_ids))
-    mpr = MPRester('CEvsr9tiYxi6MaxfRnSU7V9FCaIAcAZh')
-
-    a = []
-    b = []
-    c = []
-    alpha = []
-    beta = []
-    gamma = []
-    volumnes = []
-    ids = []
-    count = 0
-    for i in range(0, len(df)):
-        # try:
-        mat_id = df.iloc[i]['mat_id']
-        # print(mat_id)
-        # if mat_id == 'mp-510271':
-        #     print(mat_id)
-        # else:
-        if i != 0:
-            prev_mat_id = df.iloc[i-1]['mat_id']
-        if i == 0: 
-            prev_mat_id = None
-
-        if mat_id == prev_mat_id:
-
-            a.append(round(conventional_structure.lattice.a, 2))
-            b.append(round(conventional_structure.lattice.b, 2))
-            c.append(round(conventional_structure.lattice.c, 2))
-
-            alpha.append(round(conventional_structure.lattice.alpha, 2))
-            beta.append(round(conventional_structure.lattice.beta, 2))
-            gamma.append(round(conventional_structure.lattice.gamma, 2))           
-            # volumnes.append(round(conventional_structure.lattice.a*conventional_structure.lattice.b*conventional_structure.lattice.c, 2))
-
-            ids.append(mat_id)
-
-        else: 
-            if count in np.arange(0,10000,500):
-                print(count)
-            structure = df.iloc[i]['structure']
-
-            sga = SpacegroupAnalyzer(structure)
-            conventional_structure = sga.get_conventional_standard_structure()
-            # print(i, count)
-
-            a.append(round(conventional_structure.lattice.a, 2))
-            b.append(round(conventional_structure.lattice.b, 2))
-            c.append(round(conventional_structure.lattice.c, 2))
-
-            alpha.append(round(conventional_structure.lattice.alpha, 2))
-            beta.append(round(conventional_structure.lattice.beta, 2))
-            gamma.append(round(conventional_structure.lattice.gamma, 2))           
-            # volumnes.append(round(conventional_structure.lattice.a*conventional_structure.lattice.b*conventional_structure.lattice.c, 2))
-
-            ids.append(mat_id)
-            # print(x[i],y[i],z[i],alpha[i],beta[i],gamma[i],mat_id)
-            count += 1 
-        # except:
-            # print(mat_id)
-            # return [x,y,z,alpha,beta,gamma]
-        # print(round(conventional_structure.lattice.a, 2), 
-         #      round(conventional_structure.lattice.b, 2), 
-          #     round(conventional_structure.lattice.c, 2), 
-           #    round(conventional_structure.lattice.alpha, 2), 
-            #   round(conventional_structure.lattice.beta, 2), 
-             #  round(conventional_structure.lattice.gamma, 2), 
-              # round(conventional_structure.lattice.a*conventional_structure.lattice.b*conventional_structure.lattice.c, 2),
-              # mat_id)
-    
-    df['a'] = a
-    df['b'] = b
-    df['c'] = c
-    
-    df['alpha'] = alpha
-    df['beta'] = beta
-    df['gamma'] = gamma
-    
-    df['ids'] = ids
-    # return None
-    return df
-
-def lattice_visualize_predictions_by_material(subdf, show_plots = True, include_legend = [False]):
-    # print(test_indicies)
-    material_id = subdf.iloc[0].mat_id
-    true_crystal_sys = subdf.iloc[0]['crystal system']
-    output_list = []
-    temp_list = []
-
-    param_list = ['a_pred', 'b_pred', 'c_pred', 'alpha_pred', 'beta_pred', 'gamma_pred']
-    count = 0
-    for param in param_list:
-        # print(param)
-        # print(predictions_ordered[0])
-
-        # print(predictions_std)
-        if param == 'a_pred':
-            x_labels = subdf['x'].to_numpy()
-        elif param == 'b_pred':
-            x_labels = subdf['y'].to_numpy()
-        elif param == 'c_pred':
-            x_labels = subdf['z'].to_numpy()       
-        else:  
-            x_labels = subdf[param[0:len(param)-5]].to_numpy()
-
-        x_predictions = subdf[param].to_numpy()
-        # print(x_labels)
-        # print(x_predictions)
-
-        # print(len(errors))
-        # print(len(predictions_std))
-        # print(errors)
-        # print(predictions_std)
-        if show_plots:
-            errors = np.abs(x_labels - x_predictions)
-            errors = np.asarray(errors)
-
-            MSE = np.square(errors).mean()
-            RMSE = math.sqrt(MSE)
-            print('RMSE ' + str(RMSE))
-
-            plt.figure(figsize=(8, 7))
-            plt.title('Error Histogram', fontsize=18)
-            hist = plt.hist(errors, bins=50)
-            plt.vlines(RMSE, max(hist[0]), min(hist[0]), color='limegreen', linewidth=5, label='RMSE')
-            plt.text(RMSE + 0.25, max(hist[0]) - 0.1 * max(hist[0]), 'RMSE = ' + str(round(RMSE, 3)),
-                     horizontalalignment='center', fontsize=16)
-            plt.xticks(fontsize=16)
-            plt.yticks(fontsize=16)
-            plt.xlabel('Error', fontsize=16)
-            plt.ylabel('Frequency', fontsize=16)
-            plt.show()
-
-            plt.figure(figsize=(8, 7))
-            hist_pred = plt.hist(x_predictions, bins = 12)
-            if param == 'x':
-                plt.title('Prediction Histogram a', fontsize = 24)
-            elif param == 'y':
-                plt.title('Prediction Histogram b', fontsize = 24)
-            elif param == 'z':
-                plt.title('Prediction Histogram c', fontsize = 24)
-            else:
-                plt.title('Prediction Histogram ' + param, fontsize = 24)
-
-            plt.xticks(fontsize = 20)
-            plt.yticks(fontsize = 20)
-            plt.ylabel('Num Patterns', fontsize = 22)
-            if param == 'x':
-                plt.vlines(x_labels[0], max(hist_pred[0]), min(hist_pred[0]), label = 'True a', color = 'r', linewidth = 3)
-                plt.xlabel('Predicted a', fontsize = 22)
-
-            elif param == 'y':
-                plt.vlines(x_labels[0], max(hist_pred[0]), min(hist_pred[0]), label = 'True b', color = 'r', linewidth = 3)
-                plt.xlabel('Predicted b', fontsize = 22)
-
-            elif param == 'z':
-                plt.vlines(x_labels[0], max(hist_pred[0]), min(hist_pred[0]), label = 'True c', color = 'r', linewidth = 3)
-                plt.xlabel('Predicted c', fontsize = 22)
-
-            else:
-                plt.vlines(x_labels[0], max(hist_pred[0]), min(hist_pred[0]), label = 'True ' + param, color = 'r', linewidth = 3)
-                plt.xlabel('Predicted ' + param, fontsize = 22)
-
-            bins_list = list(hist_pred[1])
-            n_list = list(hist_pred[0])
-            mode_index = n_list.index(max(n_list))
-            print(bins_list)
-            mode = (bins_list[mode_index] + bins_list[mode_index+1])/2
-            plt.vlines(mode, max(hist_pred[0]), min(hist_pred[0]), label = 'Aggregate Prediction', color = 'limegreen', linewidth = 3)
-            if include_legend[count]:
-                plt.legend(fontsize = 20)
-            count += 1
-            plt.show()
-
-        else:
-            hist_pred = np.histogram(x_predictions, bins = 12)
-            bins_list = list(hist_pred[1])
-            n_list = list(hist_pred[0])
-            mode_index = n_list.index(max(n_list))
-            # print(bins_list)
-            mode = (bins_list[mode_index] + bins_list[mode_index+1])/2
-        temp_list.append(x_predictions)
-        temp_list.append(mode)
-        temp_list.append(x_labels[0])
-    temp_list.append(material_id)
-    temp_list.append(true_crystal_sys)
-    output_list.append(temp_list)
-    # print(len(np.asarray(output_list, dtype = 'object')))
-    output_df = pd.DataFrame(np.asarray(output_list, dtype = 'object'),
-                             columns=['a_full_predictions', 'a_mode', 'a_true',
-                                     'b_full_predictions', 'b_mode', 'b_true',
-                                     'c_full_predictions', 'c_mode', 'c_true',
-                                     'alpha_full_predictions', 'alpha_mode', 'alpha_true',
-                                     'beta_full_predictions', 'beta_mode', 'beta_true',
-                                     'gamma_full_predictions', 'gamma_mode', 'gamma_true',
-                                      'material_id', 'true_crystal_sys'])
-    return output_df
 
