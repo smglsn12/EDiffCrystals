@@ -3,7 +3,7 @@ A python package allowing automated crystal structure analysis from electron dif
 This code base accompanies the manuscript "Random Forest Prediction of Crystal Structure from Electron Diffraction Patterns Incorporating Multiple Scattering" 
 (https://journals.aps.org/prmaterials/abstract/10.1103/PhysRevMaterials.8.093802)
 
-To run, first clone this repo and extract the 'data' folder from https://drive.google.com/drive/folders/1i1QaXYldgbIh9v46FMnPFRrA6nvFWetG?usp=drive_link and 
+To run, first clone this repo and extract the 'data' folder from https://drive.google.com/drive/folders/13Un6GHY8iG4NIcmZm29GjzdEJro4B210?usp=sharing and 
 replace the empty data folder in this repo with the downloaded folder. Initialize a conda environment using the included .yml file or by installing the module 
 in your local environment. 
 
